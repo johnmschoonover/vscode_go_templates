@@ -1,0 +1,22 @@
+{{/* Example Go template for the Go Template Studio preview. */}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{.Title}}</title>
+  </head>
+  <body>
+    <main>
+      <h1>{{.Title}}</h1>
+      {{if .Items}}
+      <ul>
+        {{- range .Items}}
+        <li>{{.}}</li>
+        {{- end}}
+      </ul>
+      {{else}}
+      <p><em>No items yet. Update your context file to add entries.</em></p>
+      {{end}}
+    </main>
+  </body>
+</html>

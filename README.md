@@ -9,6 +9,21 @@ This repository currently hosts the planning documents and initial scaffolding f
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
 - A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
 
+### Sample Assets
+- `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
+- The sample context provides a `Title` string and an `Items` array; the template renders the title as both the document heading and HTML title and lists the array entries.
+
+### Template Helpers
+- The renderer registers a small helper map for every previewed template. Today it exposes a `list` function so you can build slices inline without touching your context file:
+
+  ```gotemplate
+  {{$values := list "Foo" "Fiz" "Faz"}}
+  {{range $values}}
+  - {{.}}1
+  {{end}}
+  ```
+- Templates that only rely on inline data still need a context file on disk—an empty JSON object (`{}`) in a `.json`, `.yaml`, `.yml`, or `.toml` file is enough to satisfy the preview command.
+
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
 - The Go binary used for rendering can be overridden via the `goTemplateStudio.goBinary` setting when a custom toolchain is required.

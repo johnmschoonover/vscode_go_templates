@@ -102,7 +102,7 @@ func renderTemplate(path, content string, data interface{}) (string, error) {
 
 	if isHTMLTemplate(path) {
 		execute = func(value interface{}) (string, error) {
-			tmpl, err := htmltmpl.New(name).Parse(content)
+			tmpl, err := htmltmpl.New(name).Funcs(htmlFuncMap()).Parse(content)
 			if err != nil {
 				return "", err
 			}
@@ -115,7 +115,7 @@ func renderTemplate(path, content string, data interface{}) (string, error) {
 		}
 	} else {
 		execute = func(value interface{}) (string, error) {
-			tmpl, err := texttmpl.New(name).Parse(content)
+			tmpl, err := texttmpl.New(name).Funcs(textFuncMap()).Parse(content)
 			if err != nil {
 				return "", err
 			}
@@ -134,4 +134,20 @@ func renderTemplate(path, content string, data interface{}) (string, error) {
 func isHTMLTemplate(path string) bool {
 	lower := strings.ToLower(path)
 	return strings.HasSuffix(lower, ".html") || strings.HasSuffix(lower, ".htm")
+}
+
+func templateList(values ...interface{}) []interface{} {
+	return values
+}
+
+func textFuncMap() texttmpl.FuncMap {
+	return texttmpl.FuncMap{
+		"list": templateList,
+	}
+}
+
+func htmlFuncMap() htmltmpl.FuncMap {
+	return htmltmpl.FuncMap{
+		"list": templateList,
+	}
 }
