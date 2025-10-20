@@ -11,9 +11,12 @@ This repository now includes the working source code for the **Go Template Studi
 
 ## Getting Started
 1. Install dependencies with `npm install` (requires access to the npm registry).
-2. Compile the extension using `npm run compile`.
-3. Launch the extension in VS Code by pressing `F5` from this workspace.
-4. Open a Go template file and run **Go Template Studio: Open Preview** from the Command Palette.
+2. (Optional, but recommended) Install the git hooks with `pre-commit install`.
+   - Ensure the [`pre-commit`](https://pre-commit.com/) CLI is available locally (for example, `pip install pre-commit`).
+   - The configured hooks run `npm run lint` and `npm run typecheck` to keep the codebase clean.
+3. Compile the extension using `npm run compile`.
+4. Launch the extension in VS Code by pressing `F5` from this workspace.
+5. Open a Go template file and run **Go Template Studio: Open Preview** from the Command Palette.
 
 > **Note:** The extension gracefully degrades when telemetry is disabled (the default) and buffers anonymous event counts locally until enabled.
 
