@@ -1,6 +1,21 @@
 # Go Template Studio for VS Code
 
-This repository contains the product documentation and planning artifacts for **Go Template Studio**, a free VS Code extension that delivers a Markdown-style preview experience for Go `text/template` and `html/template` files.
+This repository now includes the working source code for the **Go Template Studio** VS Code extension alongside the planning artifacts. The extension delivers a Markdown-style preview experience for Go `text/template` and `html/template` files with lightweight context management and export tools.
+
+## Extension Features
+- Live preview panel for `.tmpl`, `.tpl`, and `.gotmpl` files with HTML/text toggle.
+- Context explorer view that discovers JSON data files from configurable directories.
+- Quick context picker and default-context resolution via `.vscode/goTemplateStudio.json`.
+- Inline diagnostics and sanitized preview rendering handled by the extension host.
+- Export helpers for saving rendered HTML or copying to the clipboard.
+
+## Getting Started
+1. Install dependencies with `npm install` (requires access to the npm registry).
+2. Compile the extension using `npm run compile`.
+3. Launch the extension in VS Code by pressing `F5` from this workspace.
+4. Open a Go template file and run **Go Template Studio: Open Preview** from the Command Palette.
+
+> **Note:** The extension gracefully degrades when telemetry is disabled (the default) and buffers anonymous event counts locally until enabled.
 
 ## Documents
 - [Product Requirements Document](PRD.md)
