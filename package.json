@@ -11,7 +11,11 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:goTemplateStudio.showWelcome"
+    "onCommand:goTemplateStudio.showWelcome",
+    "onCommand:goTemplateStudio.preview",
+    "onCommand:goTemplateStudio.selectContext",
+    "workspaceContains:**/templates/*.tmpl",
+    "onView:goTemplateStudio.contextExplorer"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -20,8 +24,46 @@
         "command": "goTemplateStudio.showWelcome",
         "title": "Go Template Studio: Show Welcome",
         "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.preview",
+        "title": "Go Template Studio: Preview Template",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.selectContext",
+        "title": "Go Template Studio: Select Context",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.refreshContexts",
+        "title": "Go Template Studio: Refresh Contexts",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.openContextFile",
+        "title": "Go Template Studio: Open Context File",
+        "category": "Go Template Studio"
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "goTemplateStudio.contextExplorer",
+          "name": "Go Template Contexts"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Go Template Studio",
+      "properties": {
+        "goTemplateStudio.goBinary": {
+          "type": "string",
+          "default": "go",
+          "description": "Path to the Go binary used for rendering templates."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
