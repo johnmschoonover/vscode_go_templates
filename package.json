@@ -19,6 +19,14 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "go-templates",
+        "aliases": ["Go Templates", "go templates"],
+        "extensions": [".gotmpl", ".tmpl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "commands": [
       {
         "command": "goTemplateStudio.showWelcome",
