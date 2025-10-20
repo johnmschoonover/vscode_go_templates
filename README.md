@@ -7,6 +7,7 @@ This repository currently hosts the planning documents and initial scaffolding f
 - Selecting the welcome command surfaces quick links to the PRD and technical specification so contributors can align their work with the documented plan.
 - A Go-powered renderer command shells out to the local Go runtime to compile templates against the selected context file and opens the rendered output in a preview document.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
+- A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
 
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
