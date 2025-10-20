@@ -1,8 +1,8 @@
 {
   "name": "go-template-studio",
   "displayName": "Go Template Studio",
-  "description": "Live preview and context management for Go text/template and html/template files.",
-  "version": "0.1.0",
+  "description": "Scaffolding for the Go Template Studio VS Code extension.",
+  "version": "0.0.1",
   "publisher": "example",
   "engines": {
     "vscode": "^1.85.0"
@@ -11,79 +11,17 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:gotemplate",
-    "onCommand:goTemplateStudio.preview",
-    "onCommand:goTemplateStudio.selectContext",
-    "onCommand:goTemplateStudio.export",
-    "workspaceContains:**/templates/*.tmpl"
+    "onCommand:goTemplateStudio.showWelcome"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "languages": [
-      {
-        "id": "gotemplate",
-        "extensions": [".tmpl", ".tpl", ".gotmpl"],
-        "aliases": ["Go Template", "gotemplate"],
-        "configuration": "./language-configuration.json"
-      }
-    ],
     "commands": [
       {
-        "command": "goTemplateStudio.preview",
-        "title": "Go Template Studio: Open Preview",
-        "category": "Go Template Studio"
-      },
-      {
-        "command": "goTemplateStudio.selectContext",
-        "title": "Go Template Studio: Select Context",
-        "category": "Go Template Studio"
-      },
-      {
-        "command": "goTemplateStudio.export",
-        "title": "Go Template Studio: Export Rendered Output",
-        "category": "Go Template Studio"
-      },
-      {
-        "command": "goTemplateStudio.refreshContexts",
-        "title": "Go Template Studio: Refresh Contexts",
+        "command": "goTemplateStudio.showWelcome",
+        "title": "Go Template Studio: Show Welcome",
         "category": "Go Template Studio"
       }
-    ],
-    "views": {
-      "explorer": [
-        {
-          "id": "goTemplateStudio.contexts",
-          "name": "Go Template Contexts"
-        }
-      ]
-    },
-    "configuration": {
-      "type": "object",
-      "title": "Go Template Studio",
-      "properties": {
-        "goTemplateStudio.contextDirs": {
-          "type": "array",
-          "description": "Relative directories that contain context JSON files.",
-          "default": ["context"],
-          "items": {
-            "type": "string"
-          }
-        },
-        "goTemplateStudio.templateRoots": {
-          "type": "array",
-          "description": "Directories that contain Go template files.",
-          "default": ["templates"],
-          "items": {
-            "type": "string"
-          }
-        },
-        "goTemplateStudio.telemetryEnabled": {
-          "type": "boolean",
-          "description": "Enable anonymous feature usage telemetry.",
-          "default": false
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -98,7 +36,7 @@
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.85.0",
     "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
+    "typescript": "~5.3.3"
   },
   "dependencies": {}
 }
