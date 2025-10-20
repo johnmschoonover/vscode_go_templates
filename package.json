@@ -36,7 +36,8 @@
       {
         "command": "goTemplateStudio.preview",
         "title": "Go Template Studio: Preview Template",
-        "category": "Go Template Studio"
+        "category": "Go Template Studio",
+        "icon": "$(preview)"
       },
       {
         "command": "goTemplateStudio.selectContext",
@@ -54,6 +55,15 @@
         "category": "Go Template Studio"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "goTemplateStudio.preview",
+          "group": "navigation@99",
+          "when": "resourceLangId == go-templates || resourceLangId == gotemplate || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+        }
+      ]
+    },
     "views": {
       "explorer": [
         {
