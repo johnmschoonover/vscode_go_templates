@@ -12,10 +12,8 @@ import (
 	"strings"
 	texttmpl "text/template"
 	"time"
+	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 type diagnostic struct {
@@ -175,12 +173,6 @@ func toString(value interface{}) string {
 	return fmt.Sprint(value)
 }
 
-var (
-	titleCaser = cases.Title(language.Und)
-	upperCaser = cases.Upper(language.Und)
-	lowerCaser = cases.Lower(language.Und)
-)
-
 func templateUpper(value interface{}) string {
 	return strings.ToUpper(toString(value))
 }
@@ -190,11 +182,30 @@ func templateLower(value interface{}) string {
 }
 
 func templateTitle(value interface{}) string {
-	return titleCaser.String(toString(value))
+	input := toString(value)
+	if input == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(input))
+
+	capitalizeNext := true
+	for _, r := range input {
+		if capitalizeNext {
+			builder.WriteRune(unicode.ToTitle(r))
+		} else {
+			builder.WriteRune(unicode.ToLower(r))
+		}
+
+		capitalizeNext = !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}
+
+	return builder.String()
 }
 
 func templateCapitalize(value interface{}) string {
-	lowered := lowerCaser.String(toString(value))
+	lowered := strings.ToLower(toString(value))
 	if lowered == "" {
 		return ""
 	}
@@ -204,8 +215,11 @@ func templateCapitalize(value interface{}) string {
 		return ""
 	}
 
-	capitalizedFirst := upperCaser.String(string(first))
-	return capitalizedFirst + lowered[size:]
+	var builder strings.Builder
+	builder.Grow(len(lowered))
+	builder.WriteRune(unicode.ToTitle(first))
+	builder.WriteString(lowered[size:])
+	return builder.String()
 }
 
 func templateTrim(value interface{}) string {
