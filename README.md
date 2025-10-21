@@ -15,11 +15,11 @@ This repository currently hosts the planning documents and initial scaffolding f
 - The sample context provides a `Title` string and an `Items` array; the template renders the title as both the document heading and HTML title and lists the array entries.
 
 ### Template Helpers
-- The renderer registers a small helper map for every previewed template. You can build inline data structures with `list` for slices and `map` for string-keyed maps without touching your context file:
+- The renderer registers a small helper map for every previewed template. You can build inline data structures with `list` for slices and `map`/`dict` for string-keyed maps without touching your context file:
 
   ```gotemplate
   {{$values := list "Foo" "Fiz" "Faz"}}
-  {{$pairs := map "key1" "value1" "key2" "value2"}}
+  {{$pairs := dict "key1" "value1" "key2" "value2"}}
   {{range $values}}
   - {{.}}1
   {{end}}
@@ -28,6 +28,16 @@ This repository currently hosts the planning documents and initial scaffolding f
   {{end}}
   ```
 - Templates that only rely on inline data no longer need a context file on disk; choose **Render without context** from the preview quick pick and keep authoring directly inside the template.
+- Common string filters are also available so templates can manipulate values inline: `{{ "go" | upper }}`, `{{ "GO" | lower }}`, `{{ "go template studio" | title }}`, `{{ "gO Template" | capitalize }}`, `{{ " spaced " | trim }}`, and `{{ "gopher" | replace "go" "GO" }}`.
+- Additional helpers cover defaults, joining collections, and HTML safety. For example:
+
+  ```gotemplate
+  {{ $items := list "alpha" "beta" }}
+  {{ $name := default "friend" .Name }}
+  <p>{{ $name }}, combined: {{ $items | join ", " }}</p>
+  <div>{{ "<strong>safe</strong>" | safe }}</div>
+  <div>{{ "<span>escaped</span>" | escape }}</div>
+  ```
 
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
