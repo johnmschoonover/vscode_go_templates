@@ -6,7 +6,10 @@ This repository currently hosts the planning documents and initial scaffolding f
 - The extension registers commands for welcoming new contributors, previewing templates, refreshing contexts, and selecting active context data.
 - Selecting the welcome command surfaces quick links to the PRD and technical specification so contributors can align their work with the documented plan.
 - A Go-powered renderer command shells out to the local Go runtime to compile templates against the selected context file (or an empty context) and opens the rendered output in a side-by-side preview webview.
-- The preview webview automatically refreshes whenever the template or its associated context file is saved, mirroring the behavior of VS Code's Markdown preview.
+- The preview webview now streams updates while you type (with a short debounce) in addition to reacting to saves, so you can see rendered output evolve in near real time.
+- Scroll position, text selection, and diagnostics in the preview persist between renders, keeping your place as you iterate on a template or tweak its context data.
+- Diagnostics from the renderer appear in a sidebar next to the preview content, and the status footer reports how long the latest render took.
+- HTML templates render inside an isolated iframe while other outputs show inline code, and errors surface as a banner within the preview instead of resetting the webview.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
 - A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
 
