@@ -49,21 +49,12 @@ func execute(templatePath, contextPath string) response {
 		return response{Error: "template path is required"}
 	}
 
-	if contextPath == "" {
-		return response{Error: "context path is required"}
-	}
-
 	templateBytes, err := os.ReadFile(templatePath)
 	if err != nil {
 		return response{Error: err.Error()}
 	}
 
-	contextBytes, err := os.ReadFile(contextPath)
-	if err != nil {
-		return response{Error: err.Error()}
-	}
-
-	data, err := parseContext(contextBytes)
+	data, err := loadContext(contextPath)
 	if err != nil {
 		return response{Error: err.Error()}
 	}
@@ -80,6 +71,19 @@ func execute(templatePath, contextPath string) response {
 	}
 
 	return response{Rendered: rendered}
+}
+
+func loadContext(contextPath string) (interface{}, error) {
+	if strings.TrimSpace(contextPath) == "" {
+		return map[string]any{}, nil
+	}
+
+	contextBytes, err := os.ReadFile(contextPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseContext(contextBytes)
 }
 
 func parseContext(content []byte) (interface{}, error) {

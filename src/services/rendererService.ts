@@ -17,10 +17,13 @@ interface GoWorkerResponse {
 export class RendererService {
   public constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel) {}
 
-  public async render(template: vscode.Uri, contextFile: vscode.Uri): Promise<RenderResult> {
+  public async render(template: vscode.Uri, contextFile?: vscode.Uri): Promise<RenderResult> {
     const goBinary = vscode.workspace.getConfiguration('goTemplateStudio').get<string>('goBinary', 'go');
     const workerUri = vscode.Uri.joinPath(this.context.extensionUri, 'go-worker', 'main.go');
-    const commandArgs = ['run', workerUri.fsPath, '--template', template.fsPath, '--context', contextFile.fsPath];
+    const commandArgs = ['run', workerUri.fsPath, '--template', template.fsPath];
+    if (contextFile) {
+      commandArgs.push('--context', contextFile.fsPath);
+    }
 
     this.output.appendLine(`[renderer] Executing: ${goBinary} ${commandArgs.join(' ')}`);
 
