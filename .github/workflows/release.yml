@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-worker:
+    name: Build go-worker (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin
+            arch: x64
+            goos: darwin
+            goarch: amd64
+            runner: macos-latest
+            smokeTest: false
+          - platform: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            smokeTest: true
+          - platform: linux
+            arch: x64
+            goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            smokeTest: true
+          - platform: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            smokeTest: false
+          - platform: win32
+            arch: x64
+            goos: windows
+            goarch: amd64
+            runner: windows-latest
+            smokeTest: true
+          - platform: win32
+            arch: arm64
+            goos: windows
+            goarch: arm64
+            runner: windows-latest
+            smokeTest: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
+
+      - name: Build go-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_dir="out/${{ matrix.platform }}-${{ matrix.arch }}"
+          mkdir -p "$target_dir"
+          binary_name="go-worker"
+          if [ "${{ matrix.platform }}" = "win32" ]; then
+            binary_name="go-worker.exe"
+          fi
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags "-s -w" -o "$target_dir/$binary_name" ./go-worker
+
+      - name: Smoke test go-worker (POSIX)
+        if: ${{ matrix.smokeTest && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          template_file="$(mktemp)"
+          context_file="$(mktemp)"
+          printf 'Hello {{.name}}' > "$template_file"
+          printf '{"name":"world"}' > "$context_file"
+          binary_path="./out/${{ matrix.platform }}-${{ matrix.arch }}/go-worker"
+          output=$("$binary_path" --template "$template_file" --context "$context_file")
+          echo "$output"
+          grep '"rendered":"Hello world"' <<< "$output"
+
+      - name: Smoke test go-worker (Windows)
+        if: ${{ matrix.smokeTest && matrix.platform == 'win32' }}
+        shell: pwsh
+        run: |
+          $templatePath = Join-Path $env:TEMP "template.tmpl"
+          $contextPath = Join-Path $env:TEMP "context.json"
+          Set-Content -Path $templatePath -Value 'Hello {{.name}}' -NoNewline
+          Set-Content -Path $contextPath -Value '{"name":"world"}' -NoNewline
+          $binaryPath = "./out/${{ matrix.platform }}-${{ matrix.arch }}/go-worker.exe"
+          $output = & $binaryPath --template $templatePath --context $contextPath
+          Write-Output $output
+          if ($output -notmatch '"rendered":"Hello world"') {
+            Write-Error "Smoke test output did not contain expected rendered text."
+          }
+
+      - name: Upload worker artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.arch }}
+          path: out/${{ matrix.platform }}-${{ matrix.arch }}
+
+  package-extension:
+    name: Package extension
+    runs-on: ubuntu-latest
+    needs: build-worker
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download worker artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets/bin
+
+      - name: Ensure binaries are executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          find assets/bin -type f \( -name 'go-worker' -o -name 'go-worker.exe' \) -exec chmod +x {} + || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Package VSIX
+        run: npx vsce package
+
+      - name: Publish to Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish -p "$VSCE_PAT"
+
+      - name: Publish to Open VSX
+        if: env.OVSX_TOKEN != ''
+        run: npx ovsx publish -p "$OVSX_TOKEN"

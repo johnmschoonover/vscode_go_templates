@@ -1,0 +1,17 @@
+# Exclude development and build-only assets
+.github/**
+.vscode/**
+src/**
+go-worker/**
+**/*.test.*
+**/*.spec.*
+node_modules/**
+.*
+
+# Keep runtime and documentation assets
+!.eslintrc.json
+!dist/**
+!assets/bin/**
+!language-configuration.json
+!README.md
+!LICENSE

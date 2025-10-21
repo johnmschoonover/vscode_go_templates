@@ -32,6 +32,15 @@ This repository currently hosts the planning documents and initial scaffolding f
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
 - The Go binary used for rendering can be overridden via the `goTemplateStudio.goBinary` setting when a custom toolchain is required.
+- Renderer selection is controlled by the `goTemplateStudio.rendererMode` setting:
+  - `auto` (default) prefers the bundled worker when available and falls back to the system Go toolchain when not.
+  - `bundled` requires a packaged worker and surfaces a helpful error if it is missing.
+  - `system` always shells out to the configured `goBinary`.
+
+## Renderer Binaries
+- Tagged releases include prebuilt `go-worker` binaries under `assets/bin/<platform>-<arch>/` so end users do not need Go installed. Supported targets today are `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`.
+- Development builds (for example, running from source) will automatically fall back to `go run` when the bundled binary is absent, preserving the contributor workflow.
+- Contributors can force a specific mode via `rendererMode`, or point `goBinary` at a custom toolchain when testing system-mode changes.
 
 ## Next Steps
 1. Build the Webview-based preview and export workflow once rendering pipelines are in place.
@@ -42,6 +51,9 @@ This repository currently hosts the planning documents and initial scaffolding f
 3. Launch the extension in VS Code by pressing `F5` from this workspace (this uses the included **Run Extension** launch configuration).
    - When you want automatic rebuilds, start `npm run watch` and choose the **Run Extension (Watch)** configuration from the debug dropdown.
 4. Run `npm run lint`, `npm run typecheck`, and `npm run test` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
+
+## Publishing
+- The `Release` GitHub Action builds the per-platform `go-worker` binaries, downloads them into `assets/bin/`, and packages the extension. Configure `VSCE_PAT` and/or `OVSX_TOKEN` repository secrets to enable automatic marketplace publishing when the workflow runs on a tagged release.
 
 ## Reference Documents
 - [Product Requirements Document](PRD.md)

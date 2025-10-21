@@ -79,6 +79,12 @@
           "type": "string",
           "default": "go",
           "description": "Path to the Go binary used for rendering templates."
+        },
+        "goTemplateStudio.rendererMode": {
+          "type": "string",
+          "enum": ["auto", "bundled", "system"],
+          "default": "auto",
+          "description": "Select which renderer to use: auto prefers bundled binaries, bundled requires them, system always uses the configured Go binary."
         }
       }
     }
