@@ -227,7 +227,7 @@ export class PreviewManager implements vscode.Disposable {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
     <title>Go Template Preview</title>
     <style>
       :root {
