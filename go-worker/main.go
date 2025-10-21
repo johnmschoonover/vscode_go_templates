@@ -4,12 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	htmltmpl "html/template"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	texttmpl "text/template"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type diagnostic struct {
@@ -161,16 +167,158 @@ func templateMap(values ...interface{}) (map[string]interface{}, error) {
 	return result, nil
 }
 
+func templateDict(values ...interface{}) (map[string]interface{}, error) {
+	return templateMap(values...)
+}
+
+func toString(value interface{}) string {
+	return fmt.Sprint(value)
+}
+
+var (
+	titleCaser = cases.Title(language.Und)
+	upperCaser = cases.Upper(language.Und)
+	lowerCaser = cases.Lower(language.Und)
+)
+
+func templateUpper(value interface{}) string {
+	return strings.ToUpper(toString(value))
+}
+
+func templateLower(value interface{}) string {
+	return strings.ToLower(toString(value))
+}
+
+func templateTitle(value interface{}) string {
+	return titleCaser.String(toString(value))
+}
+
+func templateCapitalize(value interface{}) string {
+	lowered := lowerCaser.String(toString(value))
+	if lowered == "" {
+		return ""
+	}
+
+	first, size := utf8.DecodeRuneInString(lowered)
+	if first == utf8.RuneError && size == 0 {
+		return ""
+	}
+
+	capitalizedFirst := upperCaser.String(string(first))
+	return capitalizedFirst + lowered[size:]
+}
+
+func templateTrim(value interface{}) string {
+	return strings.TrimSpace(toString(value))
+}
+
+func templateReplace(old interface{}, new interface{}, value interface{}) string {
+	return strings.ReplaceAll(toString(value), toString(old), toString(new))
+}
+
+func templateJoin(sep interface{}, values interface{}) (string, error) {
+	joiner := toString(sep)
+	collection := reflect.ValueOf(values)
+	if !collection.IsValid() {
+		return "", errors.New("join helper requires an array or slice")
+	}
+
+	switch collection.Kind() {
+	case reflect.Array, reflect.Slice:
+	default:
+		return "", errors.New("join helper requires an array or slice")
+	}
+
+	parts := make([]string, collection.Len())
+	for i := 0; i < collection.Len(); i++ {
+		parts[i] = toString(collection.Index(i).Interface())
+	}
+
+	return strings.Join(parts, joiner), nil
+}
+
+func templateDefault(defaultValue interface{}, value interface{}) interface{} {
+	if isFalsy(value) {
+		return defaultValue
+	}
+	return value
+}
+
+func isFalsy(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+
+	rv := reflect.ValueOf(value)
+
+	switch rv.Kind() {
+	case reflect.Bool:
+		return !rv.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return rv.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return rv.Float() == 0
+	case reflect.String:
+		return rv.Len() == 0
+	case reflect.Array, reflect.Slice, reflect.Map:
+		return rv.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		return rv.IsNil()
+	case reflect.Invalid:
+		return true
+	}
+
+	return false
+}
+
+func templateEscape(value interface{}) string {
+	return htmltmpl.HTMLEscapeString(toString(value))
+}
+
+func templateSafeText(value interface{}) string {
+	return toString(value)
+}
+
+func templateSafeHTML(value interface{}) htmltmpl.HTML {
+	return htmltmpl.HTML(toString(value))
+}
+
 func textFuncMap() texttmpl.FuncMap {
 	return texttmpl.FuncMap{
-		"list": templateList,
-		"map":  templateMap,
+		"list":       templateList,
+		"map":        templateMap,
+		"dict":       templateDict,
+		"upper":      templateUpper,
+		"lower":      templateLower,
+		"title":      templateTitle,
+		"capitalize": templateCapitalize,
+		"trim":       templateTrim,
+		"strip":      templateTrim,
+		"replace":    templateReplace,
+		"default":    templateDefault,
+		"join":       templateJoin,
+		"escape":     templateEscape,
+		"safe":       templateSafeText,
 	}
 }
 
 func htmlFuncMap() htmltmpl.FuncMap {
 	return htmltmpl.FuncMap{
-		"list": templateList,
-		"map":  templateMap,
+		"list":       templateList,
+		"map":        templateMap,
+		"dict":       templateDict,
+		"upper":      templateUpper,
+		"lower":      templateLower,
+		"title":      templateTitle,
+		"capitalize": templateCapitalize,
+		"trim":       templateTrim,
+		"strip":      templateTrim,
+		"replace":    templateReplace,
+		"default":    templateDefault,
+		"join":       templateJoin,
+		"escape":     templateEscape,
+		"safe":       templateSafeHTML,
 	}
 }
