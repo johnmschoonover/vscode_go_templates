@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export interface RenderResult {
   rendered: string;
@@ -15,31 +17,47 @@ interface GoWorkerResponse {
   error?: string;
 }
 
+interface FileSnapshot {
+  readonly fsPath: string;
+  dispose(): Promise<void>;
+}
+
 export class RendererService {
   public constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel) {}
 
   public async render(template: vscode.Uri, contextFile?: vscode.Uri): Promise<RenderResult> {
-    const { command, args, mode } = await this.resolveRendererCommand(template, contextFile);
-    this.output.appendLine(`[renderer] Executing (${mode}): ${command} ${args.join(' ')}`);
+    const templateSnapshot = await this.createSnapshot(template);
+    const contextSnapshot = contextFile ? await this.createSnapshot(contextFile) : undefined;
 
-    const response = await this.spawnProcess(command, args);
+    try {
+      const { command, args, mode } = await this.resolveRendererCommand(
+        templateSnapshot.fsPath,
+        contextSnapshot?.fsPath
+      );
+      this.output.appendLine(`[renderer] Executing (${mode}): ${command} ${args.join(' ')}`);
 
-    if (response.error) {
-      const message = `Go renderer reported an error: ${response.error}`;
-      this.output.appendLine(`[renderer] error: ${message}`);
-      throw new Error(message);
+      const response = await this.spawnProcess(command, args);
+
+      if (response.error) {
+        const message = `Go renderer reported an error: ${response.error}`;
+        this.output.appendLine(`[renderer] error: ${message}`);
+        throw new Error(message);
+      }
+
+      return {
+        rendered: response.rendered ?? '',
+        diagnostics: response.diagnostics ?? [],
+        durationMs: response.durationMs ?? 0,
+      };
+    } finally {
+      await templateSnapshot.dispose();
+      await contextSnapshot?.dispose();
     }
-
-    return {
-      rendered: response.rendered ?? '',
-      diagnostics: response.diagnostics ?? [],
-      durationMs: response.durationMs ?? 0,
-    };
   }
 
   private async resolveRendererCommand(
-    template: vscode.Uri,
-    contextFile?: vscode.Uri,
+    templatePath: string,
+    contextPath?: string
   ): Promise<{ command: string; args: string[]; mode: 'bundled' | 'system' }> {
     const config = vscode.workspace.getConfiguration('goTemplateStudio');
     const goBinary = config.get<string>('goBinary', 'go');
@@ -55,9 +73,9 @@ export class RendererService {
       );
     }
 
-    const args = ['--template', template.fsPath];
-    if (contextFile) {
-      args.push('--context', contextFile.fsPath);
+    const args = ['--template', templatePath];
+    if (contextPath) {
+      args.push('--context', contextPath);
     }
 
     if (preferBundled && bundledBinary) {
@@ -69,6 +87,35 @@ export class RendererService {
       command: goBinary,
       args: ['run', workerUri.fsPath, ...args],
       mode: 'system',
+    };
+  }
+
+  private async createSnapshot(uri: vscode.Uri): Promise<FileSnapshot> {
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uri.toString());
+    if (!document || !document.isDirty) {
+      return {
+        fsPath: uri.fsPath,
+        dispose: async () => {
+          // no-op
+        },
+      };
+    }
+
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'go-template-preview-'));
+    const tempFile = path.join(tempDirectory, path.basename(uri.fsPath));
+    await fs.writeFile(tempFile, document.getText(), 'utf8');
+
+    return {
+      fsPath: tempFile,
+      dispose: async () => {
+        try {
+          await fs.rm(tempDirectory, { recursive: true, force: true });
+        } catch (error) {
+          this.output.appendLine(
+            `[renderer] Failed to clean up temporary snapshot at ${tempDirectory}: ${(error as Error).message}`
+          );
+        }
+      },
     };
   }
 
