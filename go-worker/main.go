@@ -144,14 +144,33 @@ func templateList(values ...interface{}) []interface{} {
 	return values
 }
 
+func templateMap(values ...interface{}) (map[string]interface{}, error) {
+	if len(values)%2 != 0 {
+		return nil, errors.New("map helper requires key/value pairs")
+	}
+
+	result := make(map[string]interface{}, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].(string)
+		if !ok {
+			return nil, errors.New("map helper keys must be strings")
+		}
+		result[key] = values[i+1]
+	}
+
+	return result, nil
+}
+
 func textFuncMap() texttmpl.FuncMap {
 	return texttmpl.FuncMap{
 		"list": templateList,
+		"map":  templateMap,
 	}
 }
 
 func htmlFuncMap() htmltmpl.FuncMap {
 	return htmltmpl.FuncMap{
 		"list": templateList,
+		"map":  templateMap,
 	}
 }
