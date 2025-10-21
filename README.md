@@ -14,12 +14,16 @@ This repository currently hosts the planning documents and initial scaffolding f
 - The sample context provides a `Title` string and an `Items` array; the template renders the title as both the document heading and HTML title and lists the array entries.
 
 ### Template Helpers
-- The renderer registers a small helper map for every previewed template. Today it exposes a `list` function so you can build slices inline without touching your context file:
+- The renderer registers a small helper map for every previewed template. You can build inline data structures with `list` for slices and `map` for string-keyed maps without touching your context file:
 
   ```gotemplate
   {{$values := list "Foo" "Fiz" "Faz"}}
+  {{$pairs := map "key1" "value1" "key2" "value2"}}
   {{range $values}}
   - {{.}}1
+  {{end}}
+  {{range $key, $value := $pairs}}
+  - {{$key}}: {{$value}}
   {{end}}
   ```
 - Templates that only rely on inline data still need a context file on disk—an empty JSON object (`{}`) in a `.json`, `.yaml`, `.yml`, or `.toml` file is enough to satisfy the preview command.
