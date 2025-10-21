@@ -11,3 +11,8 @@ repos:
         entry: npm run typecheck
         language: system
         pass_filenames: false
+      - id: npm-test
+        name: npm run test
+        entry: npm run test
+        language: system
+        pass_filenames: false

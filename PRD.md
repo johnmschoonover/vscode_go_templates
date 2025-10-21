@@ -3,7 +3,7 @@
 ## 1. Overview
 - **Product Name:** Go Template Studio for VS Code
 - **Document Owner:** Product & Engineering Duo
-- **Last Updated:** 2024-04-XX
+- **Last Updated:** 2024-04-XX (updated for live preview & helper refinements)
 - **Status:** Draft for MVP build kick-off
 
 Go Template Studio is a free Visual Studio Code extension that enables developers to author, inspect, and render Go `text/template` and `html/template` assets directly inside the editor. The extension focuses on replicating the simplicity of VS Code's Markdown preview experience for Go templates so that developers can see beautifully rendered output without leaving the editor. By reducing context switching between template editing, sample data creation, and command-line rendering, the extension aims to make day-to-day template work faster and friendlier.
@@ -33,7 +33,7 @@ Go developers rely heavily on templates for generating configuration files, HTML
 - **New Go Learner:** Is exploring Go templates for the first time and benefits from immediate visual feedback and examples.
 
 ### Key Use Cases
-1. Edit a template file and preview the rendered output side-by-side with live updates.
+1. Edit a template file and preview the rendered output side-by-side with live updates that react on save for both the template and its context data.
 2. Create and switch between multiple reference data sets for a single template.
 3. Validate templates for missing keys, type mismatches, or syntax errors in real time.
 4. Export rendered output to files or copy to clipboard for downstream tooling.
@@ -52,7 +52,9 @@ Go developers rely heavily on templates for generating configuration files, HTML
    - Association of default context per template file, stored in workspace settings.
 
 3. **Rendering & Preview**
-   - Markdown-style preview panel with live rendering when template or context changes.
+  - Markdown-style preview panel with live rendering when template or context changes, including automatic refresh when either file is saved.
+  - Side-by-side preview layout invoked from the command palette or editor toolbar, keeping the source template visible alongside the rendered output.
+  - Built-in helper functions (`list`, `map`) available inline so authors can compose small data structures directly in templates even when no external context file is selected.
    - Toggle between HTML, plaintext, and raw rendered output formats.
    - Error overlay showing missing variables or runtime errors with actionable links back to source.
 
@@ -72,9 +74,10 @@ Go developers rely heavily on templates for generating configuration files, HTML
 
 ## 6. User Experience
 - **UI Components:**
-  - Template Preview WebView with responsive layout, toolbar for refresh/export, and view mode toggle.
+  - Template Preview WebView with responsive layout, toolbar for refresh/export, and view mode toggle, opened beside the active editor for a simultaneous editing experience.
   - Activity bar icon for "Go Template Studio" opening a custom view container with context explorer and history.
   - Inline status bar item displaying active context set.
+  - Auto-updating preview surface that re-renders when either the template or context file is saved, ensuring feedback stays in sync without manual refresh.
 - **Workflow Example:**
   1. Developer opens `templates/email.html`.
   2. Activates preview (Cmd/Ctrl+Shift+P → "Preview Go Template").
@@ -114,7 +117,7 @@ Go developers rely heavily on templates for generating configuration files, HTML
 
 ## 11. Open Questions
 - Should the extension bundle a Go runtime for systems without Go installed?
-- What level of customization is needed for template-specific helper functions?
+- What level of customization is needed for template-specific helper functions beyond the built-in `list` and `map` helpers that should operate even when no external context file is provided?
 - How should conflicts be handled when multiple templates share the same default context?
 
 ## 12. Appendices
