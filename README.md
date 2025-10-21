@@ -5,7 +5,8 @@ This repository currently hosts the planning documents and initial scaffolding f
 ## Current State
 - The extension registers commands for welcoming new contributors, previewing templates, refreshing contexts, and selecting active context data.
 - Selecting the welcome command surfaces quick links to the PRD and technical specification so contributors can align their work with the documented plan.
-- A Go-powered renderer command shells out to the local Go runtime to compile templates against the selected context file and opens the rendered output in a preview document.
+- A Go-powered renderer command shells out to the local Go runtime to compile templates against the selected context file (or an empty context) and opens the rendered output in a side-by-side preview webview.
+- The preview webview automatically refreshes whenever the template or its associated context file is saved, mirroring the behavior of VS Code's Markdown preview.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
 - A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
 
@@ -26,7 +27,7 @@ This repository currently hosts the planning documents and initial scaffolding f
   - {{$key}}: {{$value}}
   {{end}}
   ```
-- Templates that only rely on inline data still need a context file on disk—an empty JSON object (`{}`) in a `.json`, `.yaml`, `.yml`, or `.toml` file is enough to satisfy the preview command.
+- Templates that only rely on inline data no longer need a context file on disk; choose **Render without context** from the preview quick pick and keep authoring directly inside the template.
 
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
@@ -40,7 +41,7 @@ This repository currently hosts the planning documents and initial scaffolding f
 2. Compile the extension using `npm run compile`.
 3. Launch the extension in VS Code by pressing `F5` from this workspace (this uses the included **Run Extension** launch configuration).
    - When you want automatic rebuilds, start `npm run watch` and choose the **Run Extension (Watch)** configuration from the debug dropdown.
-4. Run `npm run lint` and `npm run typecheck` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
+4. Run `npm run lint`, `npm run typecheck`, and `npm run test` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
 
 ## Reference Documents
 - [Product Requirements Document](PRD.md)

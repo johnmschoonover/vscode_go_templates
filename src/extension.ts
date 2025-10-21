@@ -4,6 +4,7 @@ import { RendererService } from './services/rendererService';
 import { ContextStore } from './context/contextManager';
 import { ContextTreeDataProvider } from './context/contextTreeDataProvider';
 import { ContextAssociationManager } from './context/contextAssociationManager';
+import { PreviewManager } from './services/previewManager';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel('Go Template Studio');
@@ -24,6 +25,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const rendererService = new RendererService(context, outputChannel);
   const associationManager = new ContextAssociationManager(configurationService, contextStore, outputChannel);
+  const previewManager = new PreviewManager(rendererService, outputChannel);
+
+  context.subscriptions.push(previewManager);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('goTemplateStudio.showWelcome', async () => {
@@ -85,6 +89,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       associationManager.setActiveContext(editor.document.uri, pick.item);
+      await previewManager.updateContext(editor.document.uri, pick.item.uri);
       void vscode.window.showInformationMessage(`Context set to ${pick.item.relativePath}`);
     })
   );
@@ -109,11 +114,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           );
         } else {
           const pick = await vscode.window.showQuickPick(
-            contexts.map((item) => ({
-              label: item.label,
-              description: item.relativePath,
-              item,
-            })),
+            [
+              {
+                label: 'Render without context',
+                description: 'Use an empty object for template data',
+                item: undefined,
+              },
+              ...contexts.map((item) => ({
+                label: item.label,
+                description: item.relativePath,
+                item,
+              })),
+            ],
             {
               placeHolder: 'Select a context file for rendering',
             }
@@ -123,37 +135,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             return;
           }
 
-          activeContext = pick.item;
-          contextUri = activeContext.uri;
-          associationManager.setActiveContext(templateUri, activeContext);
+          if (pick.item) {
+            activeContext = pick.item;
+            contextUri = activeContext.uri;
+            associationManager.setActiveContext(templateUri, activeContext);
+          } else {
+            contextUri = undefined;
+          }
         }
       }
 
-      if (activeContext) {
-        contextUri = activeContext.uri;
-      }
-
-      try {
-        const result = await rendererService.render(templateUri, contextUri);
-        const document = await vscode.workspace.openTextDocument({
-          content: result.rendered,
-          language: editor.document.languageId === 'gotemplate' ? 'html' : editor.document.languageId,
-        });
-        await vscode.window.showTextDocument(document, { preview: true });
-
-        if (result.diagnostics.length > 0) {
-          const detail = result.diagnostics.map((diag) => `• ${diag.message}`).join('\n');
-          void vscode.window.showWarningMessage(`Render completed with diagnostics:\n${detail}`);
-        } else {
-          void vscode.window.setStatusBarMessage(
-            `Go Template Studio: Rendered in ${result.durationMs} ms`,
-            5000
-          );
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(`Failed to render template: ${message}`);
-      }
+      await previewManager.showPreview(templateUri, contextUri, editor.document.languageId);
     })
   );
 }
