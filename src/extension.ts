@@ -99,34 +99,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       const templateUri = editor.document.uri;
       let activeContext = associationManager.getActiveContext(templateUri);
+      let contextUri: vscode.Uri | undefined = activeContext?.uri;
       if (!activeContext) {
         const contexts = associationManager.listContexts();
         if (contexts.length === 0) {
-          void vscode.window.showWarningMessage('No context files available. Add a file to render the template.');
-          return;
-        }
+          void vscode.window.setStatusBarMessage(
+            'Go Template Studio: Rendering with empty context.',
+            5000
+          );
+        } else {
+          const pick = await vscode.window.showQuickPick(
+            contexts.map((item) => ({
+              label: item.label,
+              description: item.relativePath,
+              item,
+            })),
+            {
+              placeHolder: 'Select a context file for rendering',
+            }
+          );
 
-        const pick = await vscode.window.showQuickPick(
-          contexts.map((item) => ({
-            label: item.label,
-            description: item.relativePath,
-            item,
-          })),
-          {
-            placeHolder: 'Select a context file for rendering',
+          if (!pick) {
+            return;
           }
-        );
 
-        if (!pick) {
-          return;
+          activeContext = pick.item;
+          contextUri = activeContext.uri;
+          associationManager.setActiveContext(templateUri, activeContext);
         }
+      }
 
-        activeContext = pick.item;
-        associationManager.setActiveContext(templateUri, activeContext);
+      if (activeContext) {
+        contextUri = activeContext.uri;
       }
 
       try {
-        const result = await rendererService.render(templateUri, activeContext.uri);
+        const result = await rendererService.render(templateUri, contextUri);
         const document = await vscode.workspace.openTextDocument({
           content: result.rendered,
           language: editor.document.languageId === 'gotemplate' ? 'html' : editor.document.languageId,
