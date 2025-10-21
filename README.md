@@ -34,7 +34,8 @@ This repository currently hosts the planning documents and initial scaffolding f
 ## Development Workflow
 1. Install dependencies with `npm install` (requires access to the npm registry).
 2. Compile the extension using `npm run compile`.
-3. Launch the extension in VS Code by pressing `F5` from this workspace.
+3. Launch the extension in VS Code by pressing `F5` from this workspace (this uses the included **Run Extension** launch configuration).
+   - When you want automatic rebuilds, start `npm run watch` and choose the **Run Extension (Watch)** configuration from the debug dropdown.
 4. Run `npm run lint` and `npm run typecheck` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
 
 ## Reference Documents
