@@ -72,5 +72,6 @@ This repository currently hosts the planning documents and initial scaffolding f
 - [Product Requirements Document](PRD.md)
 - [Technical Specification](technical_spec.md)
 - [UX Brief](ux_brief.md)
+- [Quickstart Guide](docs/quickstart.md)
 - [Testing & QA Plan](testing_plan.md)
 - [Operational Readiness Checklist](operational_readiness.md)
