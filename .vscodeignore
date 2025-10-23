@@ -2,7 +2,6 @@
 .github/**
 .vscode/**
 src/**
-go-worker/**
 **/*.test.*
 **/*.spec.*
 node_modules/**
