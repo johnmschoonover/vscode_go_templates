@@ -36,6 +36,13 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "go-templates",
+        "scopeName": "source.go-template",
+        "path": "./syntaxes/go-template.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "goTemplateStudio.showWelcome",
