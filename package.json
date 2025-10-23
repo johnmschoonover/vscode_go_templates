@@ -1,9 +1,18 @@
 {
   "name": "go-template-studio",
   "displayName": "Go Template Studio",
-  "description": "Scaffolding for the Go Template Studio VS Code extension.",
+  "description": "A Visual Studio Code extension for working with Go templates, providing syntax highlighting, previewing, and context management.",
   "version": "0.0.1",
-  "publisher": "example",
+  "publisher": "johnmschoonover",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnmschoonover/vscode_go_templates.git"
+  },
+  "bugs": {
+    "url": "https://github.com/johnmschoonover/vscode_go_templates/issues"
+  },
+  "homepage": "https://github.com/johnmschoonover/vscode_go_templates#readme",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
