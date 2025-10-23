@@ -8,3 +8,4 @@ This repository is still in its early scaffolding phase. Follow these guidelines
 4. **Document Scope:** Update `README.md` (or other relevant docs) whenever the implemented surface area changes materially so contributors know the current capabilities.
 5. **Review Ripple Effects of New Files:** Whenever you add a new file, double-check whether related docs (for example `README.md`, `technical_spec.md`, or workflow guides) or configuration should be updated in the same change so the repository stays consistent.
 6. **Surface Open Questions:** When requirements are unclear, ask for clarification instead of guessing at behavior. Document any assumptions you must make in the code comments or commit message.
+7. **Maintain UX Brief Status:** As part of every change, review `ux_brief.md` to keep status notes up to date and record any newly approved features or follow-up resolutions.
