@@ -69,7 +69,8 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then
             binary_name="go-worker.exe"
           fi
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags "-s -w" -o "$target_dir/$binary_name" ./go-worker
+          # Build from within the go-worker module to avoid "cannot find main module" errors
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -C go-worker -trimpath -ldflags "-s -w" -o "../$target_dir/$binary_name" .
 
       - name: Smoke test go-worker (POSIX)
         if: ${{ matrix.smokeTest && matrix.platform != 'win32' }}

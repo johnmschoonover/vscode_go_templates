@@ -2,11 +2,11 @@
 .github/**
 .vscode/**
 src/**
-go-worker/**
 **/*.test.*
 **/*.spec.*
 node_modules/**
 .*
+*.vsix
 
 # Keep runtime and documentation assets
 !.eslintrc.json
