@@ -1,0 +1,18 @@
+{{ $my_list := list
+  "Foo"
+  "Fiz"
+  "Faz"
+-}}
+
+{{ $my_map := map
+  "key1" "value1"
+  "key2" "value2"
+-}}
+
+
+{{ range $key, $value := $my_map -}}
+Steps:
+{{ range $job_name := $my_list -}}
+  - {{$job_name}}: {{$value}} for {{$key}}
+{{end}}
+{{end}}
