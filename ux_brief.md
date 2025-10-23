@@ -50,29 +50,34 @@
 ## 7. Feature Follow-Up Notes
 
 ### 7.1 Live Preview Enhancements (Feature #1)
-- **Current behavior:** The MVP preview already re-renders on file save or when edits settle after the debounce window, but the user must keep the preview panel focused and occasionally triggers a manual refresh when context metadata changes.
-- **Proposed enhancement:** Promote true live-updating by diffing template + context dependencies and automatically re-rendering whenever either changes—even if the preview panel is in the background. The update should keep scroll position and selection ranges in sync, reducing context switching during fast iteration.
+- **Status:** ✅ Completed. The current preview pipeline tracks template and context signatures, schedules renders on change/save events, and restores scroll/selection state after each webview update.
+- **Implementation notes:** See `src/services/previewManager.ts` for the change listeners, signature comparison, and state persistence logic.
 
 ### 7.2 Side-by-Side Preview Layout (Feature #2)
+- **Status:** ⏳ Pending. The extension always opens the preview beside the active editor, but it lacks a command or setting to toggle dedicated side-by-side layout options, orientation, or persist workspace preferences.
 - **Invocation:** Allow users to launch a dedicated split layout via the command palette (`Go Template Studio: Toggle Side-by-Side Preview`) or a toolbar button.
 - **Layout behavior:** Pin the rendered WebView beside the source editor with optional vertical/horizontal orientation. Persist the layout choice per-workspace so frequent editors can return to their preferred view automatically.
 - **State management:** When multiple templates are opened, the preview manager should maintain one panel per document and focus the matching preview when the user switches editors. This removes the need to reopen the preview repeatedly.
 
 ### 7.3 Inline Diagnostics Scope (Feature #3)
+- **Status:** ⏳ Pending. Diagnostics are only surfaced inside the preview webview; no VS Code diagnostic collection exists yet to raise editor squiggles or richer context validation errors.
 - Expand diagnostics beyond syntax errors to include missing/extra context keys, type mismatches detected in sample data, and unsafe function usage when helper libraries are disabled.
 - Surface diagnostics both in the editor (squiggles + hover) and in the preview banner with quick actions that jump to the offending token or suggest fixes (e.g., "Add default value" for missing keys).
 - Cache last-known good render output so that the preview can fall back gracefully while still highlighting issues inline.
 
 ### 7.4 Helper Functions Availability (Feature #5)
+- **Status:** ✅ Completed. The Go worker registers helper maps for HTML and text templates, corresponding quickstart docs call them out, and unit tests cover their behavior.
 - Baseline `list`, `map`, `dict`, and simple arithmetic helpers should continue working out of the box, even without external context files.
 - Document in the quickstart that these helpers are pre-registered by the Go worker, and add unit coverage so regressions are caught if the worker code changes.
 
 ### 7.5 Multi-Format View Modes (Feature #6)
+- **Status:** ⏳ Pending. The preview currently offers only HTML/text rendering pathways without JSON/YAML toggles or graceful handling for unsupported conversions.
 - Extend the existing view toggle to support HTML, plain text, raw template output, JSON, and YAML.
 - When JSON/YAML is selected, serialize the rendered Go template data structure (pre-HTML escaping) so teams producing config files can verify structure without extra tooling.
 - Highlight unsupported conversions gracefully (e.g., streaming binary data) with a toast explaining the limitation.
 
 ### 7.6 Render Diff Workflow (Feature #8)
+- **Status:** ⏳ Pending. No `Compare Rendered Output…` command or diff view exists yet; preview sessions operate independently without diff synchronization.
 - Provide a `Compare Rendered Output…` command that lets users choose a second context (or Git ref) and opens a VS Code diff editor showing render A vs. render B.
 - Annotate the diff with badges noting which context or commit produced each side, so reviewers understand the comparison origin.
 - Support updating the diff live as either context changes, enabling regression checks before sharing templates with stakeholders.
