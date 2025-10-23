@@ -11,7 +11,7 @@ This repository currently hosts the planning documents and initial scaffolding f
 - Diagnostics from the renderer appear in a sidebar next to the preview content, and the status footer reports how long the latest render took.
 - HTML templates render inside an isolated iframe while other outputs show inline code, and errors surface as a banner within the preview instead of resetting the webview.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
-- A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
+- A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates, complete with TextMate-based syntax highlighting.
 
 ### Sample Assets
 - `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
@@ -75,3 +75,4 @@ This repository currently hosts the planning documents and initial scaffolding f
 - [Quickstart Guide](docs/quickstart.md)
 - [Testing & QA Plan](testing_plan.md)
 - [Operational Readiness Checklist](operational_readiness.md)
+- [Third-Party Licenses](docs/THIRD_PARTY_LICENSES.md)

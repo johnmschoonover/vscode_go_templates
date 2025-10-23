@@ -81,3 +81,7 @@
 - Provide a `Compare Rendered Output…` command that lets users choose a second context (or Git ref) and opens a VS Code diff editor showing render A vs. render B.
 - Annotate the diff with badges noting which context or commit produced each side, so reviewers understand the comparison origin.
 - Support updating the diff live as either context changes, enabling regression checks before sharing templates with stakeholders.
+
+### 7.7 Go Template Syntax Highlighting (Feature #9)
+- **Status:** ✅ Completed. The extension now bundles a TextMate grammar sourced from `jinliming2/vscode-go-template`, enabling scoped syntax highlighting for Go template delimiters, actions, and pipelines.
+- **Implementation notes:** The grammar is vendored at `syntaxes/go-template.tmLanguage.json` and registered in `package.json` under `contributes.grammars`.
