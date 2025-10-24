@@ -16,3 +16,8 @@ repos:
         entry: npm run test
         language: system
         pass_filenames: false
+      - id: npm-verify-grammar
+        name: npm run verify:grammar
+        entry: npm run verify:grammar
+        language: system
+        pass_filenames: false
