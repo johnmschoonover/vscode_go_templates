@@ -11,7 +11,7 @@ This repository currently hosts the planning documents and initial scaffolding f
 - Diagnostics from the renderer appear in a sidebar next to the preview content, and the status footer reports how long the latest render took.
 - HTML templates render inside an isolated iframe while other outputs show inline code, and errors surface as a banner within the preview instead of resetting the webview.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
-- A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates.
+- A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates, complete with TextMate-based syntax highlighting powered by the vendored grammar from [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template).
 
 ### Sample Assets
 - `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
@@ -65,6 +65,12 @@ This repository currently hosts the planning documents and initial scaffolding f
    - When you want automatic rebuilds, start `npm run watch` and choose the **Run Extension (Watch)** configuration from the debug dropdown.
 4. Run `npm run lint`, `npm run typecheck`, and `npm run test` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
 
+### Updating the TextMate Grammar
+- Run `npm run update:grammar` to pull the latest grammar and license snapshot from `jinliming2/vscode-go-template`.
+- Use `npm run verify:grammar` to confirm the vendored files match upstream. CI and the optional `pre-commit` hook run this check automatically so drift is caught quickly.
+- Review the upstream repository for release notes or breaking changes whenever you refresh the grammar so downstream behavior stays predictable.
+- Vendoring the grammar keeps the VSIX self-contained and spares contributors from managing Git submodules while still letting us track upstream changes with a single refresh command.
+
 ## Publishing
 - The `Release` GitHub Action builds the per-platform `go-worker` binaries, downloads them into `assets/bin/`, and packages the extension. Configure `VSCE_PAT` and/or `OVSX_TOKEN` repository secrets to enable automatic marketplace publishing when the workflow runs on a tagged release.
 
@@ -75,3 +81,4 @@ This repository currently hosts the planning documents and initial scaffolding f
 - [Quickstart Guide](docs/quickstart.md)
 - [Testing & QA Plan](testing_plan.md)
 - [Operational Readiness Checklist](operational_readiness.md)
+- [Third-Party Licenses](docs/THIRD_PARTY_LICENSES.md)
