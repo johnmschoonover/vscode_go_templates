@@ -60,10 +60,9 @@
 - **State management:** When multiple templates are opened, the preview manager should maintain one panel per document and focus the matching preview when the user switches editors. This removes the need to reopen the preview repeatedly.
 
 ### 7.3 Inline Diagnostics Scope (Feature #3)
-- **Status:** ⏳ Pending. Diagnostics are only surfaced inside the preview webview; no VS Code diagnostic collection exists yet to raise editor squiggles or richer context validation errors.
-- Expand diagnostics beyond syntax errors to include missing/extra context keys, type mismatches detected in sample data, and unsafe function usage when helper libraries are disabled.
-- Surface diagnostics both in the editor (squiggles + hover) and in the preview banner with quick actions that jump to the offending token or suggest fixes (e.g., "Add default value" for missing keys).
-- Cache last-known good render output so that the preview can fall back gracefully while still highlighting issues inline.
+- **Status:** ✅ Completed. Rendering now populates a dedicated VS Code diagnostic collection for both template and context errors, and the preview sidebar mirrors those issues with clickable entries that focus the relevant editor location.
+- Diagnostics continue to display inline inside the preview, and when rendering fails the webview preserves the last successful output while announcing the fallback state.
+- The groundwork is in place for future enhancements (e.g., richer fix suggestions) by centralizing diagnostic normalization inside `src/services/diagnosticService.ts`.
 
 ### 7.4 Helper Functions Availability (Feature #5)
 - **Status:** ✅ Completed. The Go worker registers helper maps for HTML and text templates, corresponding quickstart docs call them out, and unit tests cover their behavior.

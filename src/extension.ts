@@ -5,6 +5,7 @@ import { ContextStore } from './context/contextManager';
 import { ContextTreeDataProvider } from './context/contextTreeDataProvider';
 import { ContextAssociationManager } from './context/contextAssociationManager';
 import { PreviewManager } from './services/previewManager';
+import { DiagnosticService } from './services/diagnosticService';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel('Go Template Studio');
@@ -25,7 +26,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const rendererService = new RendererService(context, outputChannel);
   const associationManager = new ContextAssociationManager(configurationService, contextStore, outputChannel);
-  const previewManager = new PreviewManager(rendererService, outputChannel);
+  const diagnosticService = new DiagnosticService();
+  context.subscriptions.push(diagnosticService);
+
+  const previewManager = new PreviewManager(rendererService, outputChannel, diagnosticService);
 
   context.subscriptions.push(previewManager);
 

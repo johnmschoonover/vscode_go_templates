@@ -8,7 +8,7 @@ This repository currently hosts the planning documents and initial scaffolding f
 - A Go-powered renderer command shells out to the local Go runtime to compile templates against the selected context file (or an empty context) and opens the rendered output in a side-by-side preview webview.
 - The preview webview now streams updates while you type (with a short debounce) in addition to reacting to saves, so you can see rendered output evolve in near real time.
 - Scroll position, text selection, and diagnostics in the preview persist between renders, keeping your place as you iterate on a template or tweak its context data.
-- Diagnostics from the renderer appear in a sidebar next to the preview content, and the status footer reports how long the latest render took.
+- Diagnostics now surface both as VS Code squiggles and inside the preview sidebar, with clickable entries that focus the offending template or context location. The status footer reports render duration or fallback status, and the preview keeps the last successful output visible when errors occur.
 - HTML templates render inside an isolated iframe while other outputs show inline code, and errors surface as a banner within the preview instead of resetting the webview.
 - A context explorer tree view lists context files from configured directories and allows opening files or selecting them for rendering.
 - A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl` and `.gotmpl` templates, complete with TextMate-based syntax highlighting powered by the vendored grammar from [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template).
