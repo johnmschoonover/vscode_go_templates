@@ -4,15 +4,24 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+export interface RenderDiagnostic {
+  message: string;
+  severity: 'error' | 'warning';
+  file?: string;
+  line?: number;
+  column?: number;
+}
+
 export interface RenderResult {
   rendered: string;
-  diagnostics: Array<{ message: string; severity: 'error' | 'warning' }>;
+  diagnostics: RenderDiagnostic[];
   durationMs: number;
+  errorMessage?: string;
 }
 
 interface GoWorkerResponse {
   rendered?: string;
-  diagnostics?: Array<{ message: string; severity: 'error' | 'warning' }>;
+  diagnostics?: RenderDiagnostic[];
   durationMs?: number;
   error?: string;
 }
@@ -38,16 +47,11 @@ export class RendererService {
 
       const response = await this.spawnProcess(command, args);
 
-      if (response.error) {
-        const message = `Go renderer reported an error: ${response.error}`;
-        this.output.appendLine(`[renderer] error: ${message}`);
-        throw new Error(message);
-      }
-
       return {
         rendered: response.rendered ?? '',
         diagnostics: response.diagnostics ?? [],
         durationMs: response.durationMs ?? 0,
+        errorMessage: response.error,
       };
     } finally {
       await templateSnapshot.dispose();

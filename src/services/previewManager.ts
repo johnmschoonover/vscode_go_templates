@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { RendererService } from './rendererService';
+import { RendererService, RenderResult } from './rendererService';
+import { DiagnosticService, PreviewDiagnostic } from './diagnosticService';
 
 interface PreviewSession {
   readonly templateKey: string;
@@ -12,6 +13,8 @@ interface PreviewSession {
   templateSignature?: string;
   contextSignature?: string;
   renderTimer?: NodeJS.Timeout;
+  messageSubscription?: vscode.Disposable;
+  lastSuccessful?: { rendered: string; isHtml: boolean };
 }
 
 export class PreviewManager implements vscode.Disposable {
@@ -21,7 +24,8 @@ export class PreviewManager implements vscode.Disposable {
 
   public constructor(
     private readonly rendererService: RendererService,
-    private readonly output: vscode.OutputChannel
+    private readonly output: vscode.OutputChannel,
+    private readonly diagnosticService: DiagnosticService
   ) {
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument((document) => this.handleSavedDocument(document)),
@@ -67,6 +71,7 @@ export class PreviewManager implements vscode.Disposable {
         if (session?.renderTimer) {
           clearTimeout(session.renderTimer);
         }
+        session?.messageSubscription?.dispose();
         this.sessions.delete(key);
       });
     } else {
@@ -104,22 +109,44 @@ export class PreviewManager implements vscode.Disposable {
       }
 
       const result = await this.rendererService.render(session.templateUri, session.contextUri);
+      const previewDiagnostics = this.diagnosticService.applyDiagnostics(
+        session.templateUri,
+        session.contextUri,
+        result.diagnostics
+      );
+
       session.templateSignature = templateSignature;
       session.contextSignature = contextSignature;
+
+      const isHtml = this.isHtmlTemplate(session);
+      if (!result.errorMessage) {
+        session.lastSuccessful = {
+          rendered: result.rendered,
+          isHtml,
+        };
+      }
+
+      const payload = this.buildPreviewPayload(session, result, previewDiagnostics, isHtml);
       await session.panel.webview.postMessage({
         type: 'render',
-        payload: {
-          rendered: result.rendered,
-          diagnostics: result.diagnostics,
-          isHtml: this.isHtmlTemplate(session),
-          durationMs: result.durationMs,
-        },
+        payload,
       });
-      if (result.diagnostics.length > 0) {
-        const summary = result.diagnostics.map((diag) => diag.message).join('; ');
+
+      if (previewDiagnostics.length > 0) {
+        const summary = previewDiagnostics
+          .map((diag) => {
+            const scope = diag.source === 'context' ? 'context' : 'template';
+            const line = typeof diag.line === 'number' ? `:${diag.line + 1}` : '';
+            return `${scope}${line} ${diag.message}`;
+          })
+          .join('; ');
         this.output.appendLine(`[preview] rendered with diagnostics: ${summary}`);
       } else {
         this.output.appendLine('[preview] rendered successfully');
+      }
+
+      if (result.errorMessage) {
+        this.output.appendLine(`[preview] renderer reported an error: ${result.errorMessage}`);
       }
       void vscode.window.setStatusBarMessage(
         `Go Template Studio: Rendered in ${result.durationMs} ms`,
@@ -128,6 +155,7 @@ export class PreviewManager implements vscode.Disposable {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.output.appendLine(`[preview] failed to render: ${message}`);
+      this.diagnosticService.applyDiagnostics(session.templateUri, session.contextUri, []);
       await session.panel.webview.postMessage({
         type: 'error',
         payload: {
@@ -177,7 +205,73 @@ export class PreviewManager implements vscode.Disposable {
     }
 
     session.panel.webview.html = this.renderBaseHtml();
+    session.messageSubscription?.dispose();
+    session.messageSubscription = session.panel.webview.onDidReceiveMessage((message) => {
+      void this.handleWebviewMessage(session, message);
+    });
     session.initialized = true;
+  }
+
+  private async handleWebviewMessage(session: PreviewSession, message: unknown): Promise<void> {
+    if (!message || typeof message !== 'object') {
+      return;
+    }
+
+    const { type, payload } = message as { type?: string; payload?: unknown };
+    if (type === 'diagnostic.select' && payload && typeof payload === 'object') {
+      const details = payload as {
+        line?: number;
+        character?: number;
+        source?: 'template' | 'context';
+      };
+      const targetUri =
+        details.source === 'context' && session.contextUri ? session.contextUri : session.templateUri;
+      const line = typeof details.line === 'number' ? details.line : 0;
+      const character = typeof details.character === 'number' ? details.character : 0;
+      await this.revealRange(targetUri, line, character);
+    }
+  }
+
+  private async revealRange(targetUri: vscode.Uri, line: number, character: number): Promise<void> {
+    try {
+      const document = await vscode.workspace.openTextDocument(targetUri);
+      const editor = await vscode.window.showTextDocument(document, { preview: false });
+      const position = new vscode.Position(line, character);
+      const selection = new vscode.Selection(position, position);
+      editor.selection = selection;
+      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.output.appendLine(`[preview] failed to reveal diagnostic location: ${message}`);
+    }
+  }
+
+  private buildPreviewPayload(
+    session: PreviewSession,
+    result: RenderResult,
+    diagnostics: PreviewDiagnostic[],
+    isHtml: boolean
+  ): {
+    rendered: string;
+    diagnostics: PreviewDiagnostic[];
+    isHtml: boolean;
+    durationMs: number;
+    isStale: boolean;
+    errorMessage?: string;
+  } {
+    const useFallback = Boolean(result.errorMessage && session.lastSuccessful);
+    const fallback = session.lastSuccessful;
+    const rendered = useFallback ? fallback?.rendered ?? '' : result.rendered;
+    const payloadIsHtml = useFallback ? fallback?.isHtml ?? isHtml : isHtml;
+
+    return {
+      rendered,
+      diagnostics,
+      isHtml: payloadIsHtml,
+      durationMs: result.durationMs,
+      isStale: useFallback,
+      errorMessage: result.errorMessage,
+    };
   }
 
   private scheduleRender(session: PreviewSession): void {
@@ -280,19 +374,33 @@ export class PreviewManager implements vscode.Disposable {
         padding: 0;
         margin: 0;
       }
-      .diag {
+      .diag-button {
         margin-bottom: 8px;
         padding: 8px;
         border-radius: 4px;
         font-size: 12px;
         line-height: 1.4;
+        border: none;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        background: rgba(128, 128, 128, 0.1);
+        color: inherit;
       }
-      .diag--error {
-        background: rgba(255, 0, 0, 0.1);
+      .diag-button:focus {
+        outline: 2px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+      }
+      .diag-button[disabled] {
+        cursor: default;
+        opacity: 0.7;
+      }
+      .diag-button.diag--error {
+        background: rgba(255, 0, 0, 0.12);
         color: #ff4d4f;
       }
-      .diag--warning {
-        background: rgba(255, 165, 0, 0.1);
+      .diag-button.diag--warning {
+        background: rgba(255, 165, 0, 0.12);
         color: #ffa500;
       }
       .status {
@@ -312,13 +420,17 @@ export class PreviewManager implements vscode.Disposable {
       .error-banner {
         padding: 16px;
         margin: 0;
-        background: rgba(255, 0, 0, 0.1);
+        background: rgba(255, 0, 0, 0.12);
         color: #ff4d4f;
         display: none;
         border-bottom: 1px solid rgba(255, 0, 0, 0.2);
       }
       .error-banner[aria-hidden="false"] {
         display: block;
+      }
+      .status--stale {
+        background: rgba(255, 165, 0, 0.12);
+        color: #ffa500;
       }
     </style>
   </head>
@@ -442,8 +554,30 @@ export class PreviewManager implements vscode.Disposable {
             diagnostics.removeAttribute('hidden');
             for (const diag of payload.diagnostics) {
               const item = document.createElement('li');
-              item.className = 'diag diag--' + diag.severity;
-              item.textContent = diag.message;
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'diag-button diag--' + diag.severity;
+              const segments = [diag.source === 'context' ? 'Context' : 'Template'];
+              if (typeof diag.line === 'number' && typeof diag.character === 'number') {
+                segments.push('Line ' + (diag.line + 1) + ', Col ' + (diag.character + 1));
+              } else if (typeof diag.line === 'number') {
+                segments.push('Line ' + (diag.line + 1));
+              } else if (typeof diag.character === 'number') {
+                segments.push('Col ' + (diag.character + 1));
+              }
+              const label = segments.join(' \u00B7 ');
+              button.textContent = (label ? label + ': ' : '') + diag.message;
+              button.addEventListener('click', () => {
+                vscode.postMessage({
+                  type: 'diagnostic.select',
+                  payload: {
+                    line: typeof diag.line === 'number' ? diag.line : 0,
+                    character: typeof diag.character === 'number' ? diag.character : 0,
+                    source: diag.source,
+                  },
+                });
+              });
+              item.appendChild(button);
               diagnosticsList.appendChild(item);
             }
           } else {
@@ -466,9 +600,25 @@ export class PreviewManager implements vscode.Disposable {
             content.appendChild(pre);
           }
 
-          errorBanner.setAttribute('aria-hidden', 'true');
-          errorBanner.textContent = '';
-          status.textContent = 'Rendered in ' + payload.durationMs + ' ms';
+          errorBanner.textContent = payload.errorMessage || '';
+          if (payload.errorMessage) {
+            errorBanner.setAttribute('aria-hidden', 'false');
+          } else {
+            errorBanner.setAttribute('aria-hidden', 'true');
+          }
+
+          if (payload.errorMessage) {
+            if (payload.isStale) {
+              status.textContent =
+                'Render failed, showing last successful result (' + payload.durationMs + ' ms)';
+            } else {
+              status.textContent = 'Render failed (' + payload.durationMs + ' ms)';
+            }
+            status.classList.add('status--stale');
+          } else {
+            status.textContent = 'Rendered in ' + payload.durationMs + ' ms';
+            status.classList.remove('status--stale');
+          }
           status.hidden = false;
 
           restoreSelection(content, previous.selection);
@@ -480,19 +630,6 @@ export class PreviewManager implements vscode.Disposable {
             },
             selection: captureSelection(content),
           });
-        }
-
-        function renderError(payload) {
-          content.innerHTML = '';
-          const pre = document.createElement('pre');
-          pre.className = 'preview-code';
-          pre.textContent = payload.message;
-          content.appendChild(pre);
-          diagnostics.setAttribute('hidden', '');
-          diagnosticsList.innerHTML = '';
-          status.hidden = true;
-          errorBanner.textContent = payload.message;
-          errorBanner.setAttribute('aria-hidden', 'false');
         }
 
         window.addEventListener('message', (event) => {
@@ -508,6 +645,19 @@ export class PreviewManager implements vscode.Disposable {
         });
 
         setScroll(getState());
+
+        function renderError(payload) {
+          content.innerHTML = '';
+          const pre = document.createElement('pre');
+          pre.className = 'preview-code';
+          pre.textContent = payload.message;
+          content.appendChild(pre);
+          diagnostics.setAttribute('hidden', '');
+          diagnosticsList.innerHTML = '';
+          status.hidden = true;
+          errorBanner.textContent = payload.message;
+          errorBanner.setAttribute('aria-hidden', 'false');
+        }
       })();
     </script>
   </body>
