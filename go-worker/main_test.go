@@ -64,6 +64,14 @@ func TestExecuteReportsTemplateErrors(t *testing.T) {
 	if resp.Diagnostics[0].Severity != "error" {
 		t.Fatalf("expected error severity, got %q", resp.Diagnostics[0].Severity)
 	}
+
+	if resp.Diagnostics[0].File != templatePath {
+		t.Fatalf("expected diagnostic to target template path, got %q", resp.Diagnostics[0].File)
+	}
+
+	if resp.Diagnostics[0].Line == 0 {
+		t.Fatalf("expected diagnostic line to be populated: %+v", resp.Diagnostics[0])
+	}
 }
 
 func TestLoadContextBehaviors(t *testing.T) {
@@ -107,6 +115,34 @@ func TestLoadContextBehaviors(t *testing.T) {
 			t.Fatalf("expected key 'values' to be present: %v", asMap)
 		}
 	})
+}
+
+func TestExecuteReportsContextErrors(t *testing.T) {
+	dir := t.TempDir()
+
+	templatePath := filepath.Join(dir, "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte("Hello"), 0o600); err != nil {
+		t.Fatalf("failed to write template file: %v", err)
+	}
+
+	contextPath := filepath.Join(dir, "context.json")
+	if err := os.WriteFile(contextPath, []byte("not json"), 0o600); err != nil {
+		t.Fatalf("failed to write context file: %v", err)
+	}
+
+	resp := execute(templatePath, contextPath)
+	if len(resp.Diagnostics) != 1 {
+		t.Fatalf("expected single diagnostic for invalid context, got %d", len(resp.Diagnostics))
+	}
+
+	diag := resp.Diagnostics[0]
+	if diag.File != contextPath {
+		t.Fatalf("expected diagnostic to reference context path %q, got %q", contextPath, diag.File)
+	}
+
+	if diag.Line != 0 {
+		t.Fatalf("expected context diagnostic to omit line information, got %d", diag.Line)
+	}
 }
 
 func TestParseContext(t *testing.T) {

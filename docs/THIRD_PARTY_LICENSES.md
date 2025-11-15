@@ -4,6 +4,6 @@ The Go Template Studio extension bundles third-party assets under their respecti
 
 ## TextMate Grammar
 - **Component:** Go Template TextMate grammar (`syntaxes/go-template.tmLanguage.json`)
-- **Source:** [jinliming2/vscode-go-template](https://github.com/jinliming2/vscode-go-template)
-- **License:** MIT (see [`docs/jinliming2-vscode-go-template-LICENSE`](jinliming2-vscode-go-template-LICENSE))
+- **Source:** [jinliming2/vscode-go-template](https://github.com/jinliming2/vscode-go-template) (vendored snapshot)
+- **License:** MIT (see [`third_party/licenses/jinliming2-vscode-go-template/LICENSE`](../third_party/licenses/jinliming2-vscode-go-template/LICENSE))
 

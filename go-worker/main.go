@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	texttmpl "text/template"
 	"time"
@@ -19,6 +21,9 @@ import (
 type diagnostic struct {
 	Message  string `json:"message"`
 	Severity string `json:"severity"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
 }
 
 type response struct {
@@ -60,21 +65,59 @@ func execute(templatePath, contextPath string) response {
 
 	data, err := loadContext(contextPath)
 	if err != nil {
-		return response{Error: err.Error()}
+		diag := diagnostic{
+			Message:  err.Error(),
+			Severity: "error",
+		}
+		if strings.TrimSpace(contextPath) != "" {
+			diag.File = contextPath
+		}
+		return response{
+			Diagnostics: []diagnostic{diag},
+			Error:       err.Error(),
+		}
 	}
 
 	rendered, err := renderTemplate(templatePath, string(templateBytes), data)
 	if err != nil {
 		return response{
-			Diagnostics: []diagnostic{{
-				Message:  err.Error(),
-				Severity: "error",
-			}},
-			Error: err.Error(),
+			Diagnostics: []diagnostic{templateDiagnostic(err, templatePath)},
+			Error:       err.Error(),
 		}
 	}
 
 	return response{Rendered: rendered}
+}
+
+func templateDiagnostic(err error, templatePath string) diagnostic {
+	diag := diagnostic{
+		Message:  err.Error(),
+		Severity: "error",
+		File:     templatePath,
+	}
+
+	extractTemplatePosition(&diag)
+
+	return diag
+}
+
+var templateErrorPattern = regexp.MustCompile(`template: [^:]+:(\d+)(?::(\d+))?:`)
+
+func extractTemplatePosition(diag *diagnostic) {
+	matches := templateErrorPattern.FindStringSubmatch(diag.Message)
+	if len(matches) == 0 {
+		return
+	}
+
+	if line, err := strconv.Atoi(matches[1]); err == nil {
+		diag.Line = line
+	}
+
+	if len(matches) > 2 {
+		if column, err := strconv.Atoi(matches[2]); err == nil {
+			diag.Column = column
+		}
+	}
 }
 
 func loadContext(contextPath string) (interface{}, error) {

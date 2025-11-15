@@ -112,7 +112,9 @@
     "typecheck": "tsc -p ./ --noEmit",
     "lint": "eslint src --ext ts",
     "test": "npm run test:templates",
-    "test:templates": "cd go-worker && go test ./..."
+    "test:templates": "cd go-worker && go test ./...",
+    "update:grammar": "node ./scripts/update-go-template-grammar.mjs",
+    "verify:grammar": "node ./scripts/check-go-template-grammar.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^6.18.1",
