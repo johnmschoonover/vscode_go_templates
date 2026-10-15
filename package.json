@@ -105,6 +105,23 @@
         "command": "goTemplateStudio.deleteContext",
         "title": "Go Template Studio: Delete Context File",
         "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.exportOutput",
+        "title": "Go Template Studio: Export Rendered Output",
+        "category": "Go Template Studio",
+        "icon": "$(export)"
+      },
+      {
+        "command": "goTemplateStudio.refreshPreview",
+        "title": "Go Template Studio: Refresh Preview",
+        "category": "Go Template Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "goTemplateStudio.toggleViewMode",
+        "title": "Go Template Studio: Toggle Preview View Mode",
+        "category": "Go Template Studio"
       }
     ],
     "menus": {
@@ -112,6 +129,11 @@
         {
           "command": "goTemplateStudio.preview",
           "group": "navigation@99",
+          "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+        },
+        {
+          "command": "goTemplateStudio.exportOutput",
+          "group": "navigation@100",
           "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
         }
       ],
@@ -178,6 +200,17 @@
           "enum": ["auto", "bundled", "system"],
           "default": "auto",
           "description": "Select which renderer to use: auto prefers bundled binaries, bundled requires them, system always uses the configured Go binary."
+        },
+        "goTemplateStudio.defaultViewMode": {
+          "type": "string",
+          "enum": ["html", "text", "raw"],
+          "enumDescriptions": [
+            "Render HTML output in an isolated frame (text templates fall back to Text).",
+            "Show the rendered output as plain text; HTML markup is stripped.",
+            "Show the rendered output source with markup visible."
+          ],
+          "default": "html",
+          "description": "Preview view mode used until a mode is chosen from the preview toolbar or the Toggle Preview View Mode command (that choice is remembered per workspace)."
         }
       }
     }

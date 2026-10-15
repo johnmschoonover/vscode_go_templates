@@ -1,7 +1,37 @@
+import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { RendererService, RenderResult } from './rendererService';
 import { DiagnosticService, PreviewDiagnostic } from './diagnosticService';
+import type { RenderSnapshot } from './exportService';
+
+export const VIEW_MODES = ['html', 'text', 'raw'] as const;
+export type ViewMode = (typeof VIEW_MODES)[number];
+
+export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+  html: 'HTML',
+  text: 'Text',
+  raw: 'Raw',
+};
+
+export function isViewMode(value: unknown): value is ViewMode {
+  return typeof value === 'string' && (VIEW_MODES as readonly string[]).includes(value);
+}
+
+const VIEW_MODE_STATE_KEY = 'goTemplateStudio.preview.viewMode';
+
+export interface PreviewRenderState {
+  /** True when the latest render failed and the preview shows the last good output or an error. */
+  readonly degraded: boolean;
+  readonly message?: string;
+}
+
+interface SuccessfulRender {
+  rendered: string;
+  isHtml: boolean;
+  contextUri?: vscode.Uri;
+  renderedAt: Date;
+}
 
 interface PreviewSession {
   readonly templateKey: string;
@@ -14,22 +44,63 @@ interface PreviewSession {
   contextSignature?: string;
   renderTimer?: NodeJS.Timeout;
   messageSubscription?: vscode.Disposable;
-  lastSuccessful?: { rendered: string; isHtml: boolean };
+  viewStateSubscription?: vscode.Disposable;
+  lastSuccessful?: SuccessfulRender;
+  renderState?: PreviewRenderState;
 }
 
+interface PreviewPayload {
+  rendered: string;
+  diagnostics: PreviewDiagnostic[];
+  isHtml: boolean;
+  durationMs: number;
+  isStale: boolean;
+  errorMessage?: string;
+  viewMode: ViewMode;
+}
+
+/**
+ * Webview message protocol.
+ *
+ * Extension -> webview:
+ *   - `render`          { payload: PreviewPayload }
+ *   - `error`           { payload: { message } } (only when no last-good output exists)
+ *   - `viewMode.update` { payload: { mode: ViewMode } }
+ *
+ * Webview -> extension:
+ *   - `diagnostic.select` { payload: { line, character, source } }
+ *   - `preview.refresh`   {}
+ *   - `preview.export`    {}
+ *   - `viewMode.set`      { payload: { mode: ViewMode } }
+ */
 export class PreviewManager implements vscode.Disposable {
   private readonly sessions = new Map<string, PreviewSession>();
   private readonly disposables: vscode.Disposable[] = [];
   private readonly renderDelayMs = 200;
+  private readonly onDidChangeStateEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
+  private lastActiveKey: string | undefined;
+
+  /** Fires when a preview finishes rendering, gains/loses focus, or closes. */
+  public readonly onDidChangeState = this.onDidChangeStateEmitter.event;
 
   public constructor(
     private readonly rendererService: RendererService,
     private readonly output: vscode.OutputChannel,
-    private readonly diagnosticService: DiagnosticService
+    private readonly diagnosticService: DiagnosticService,
+    private readonly workspaceState: vscode.Memento
   ) {
     this.disposables.push(
+      this.onDidChangeStateEmitter,
       vscode.workspace.onDidSaveTextDocument((document) => this.handleSavedDocument(document)),
-      vscode.workspace.onDidChangeTextDocument((event) => this.handleChangedDocument(event))
+      vscode.workspace.onDidChangeTextDocument((event) => this.handleChangedDocument(event)),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (
+          event.affectsConfiguration('goTemplateStudio.defaultViewMode') &&
+          !isViewMode(this.workspaceState.get<string>(VIEW_MODE_STATE_KEY))
+        ) {
+          void this.broadcastViewMode();
+        }
+      })
     );
   }
 
@@ -57,7 +128,7 @@ export class PreviewManager implements vscode.Disposable {
         { enableScripts: true, retainContextWhenHidden: true }
       );
 
-      session = {
+      const created: PreviewSession = {
         templateKey: key,
         templateUri,
         contextUri,
@@ -65,14 +136,26 @@ export class PreviewManager implements vscode.Disposable {
         languageId,
         initialized: false,
       };
+      session = created;
 
-      this.sessions.set(key, session);
-      panel.onDidDispose(() => {
-        if (session?.renderTimer) {
-          clearTimeout(session.renderTimer);
+      this.sessions.set(key, created);
+      created.viewStateSubscription = panel.onDidChangeViewState((event) => {
+        if (event.webviewPanel.active) {
+          this.lastActiveKey = key;
         }
-        session?.messageSubscription?.dispose();
+        this.onDidChangeStateEmitter.fire(created.templateUri);
+      });
+      panel.onDidDispose(() => {
+        if (created.renderTimer) {
+          clearTimeout(created.renderTimer);
+        }
+        created.messageSubscription?.dispose();
+        created.viewStateSubscription?.dispose();
         this.sessions.delete(key);
+        if (this.lastActiveKey === key) {
+          this.lastActiveKey = undefined;
+        }
+        this.onDidChangeStateEmitter.fire(created.templateUri);
       });
     } else {
       session.templateUri = templateUri;
@@ -80,6 +163,7 @@ export class PreviewManager implements vscode.Disposable {
       session.languageId = languageId;
     }
 
+    this.lastActiveKey = key;
     await this.renderSession(session, true);
     session.panel.reveal(vscode.ViewColumn.Beside, true);
   }
@@ -93,6 +177,124 @@ export class PreviewManager implements vscode.Disposable {
 
     session.contextUri = contextUri;
     await this.renderSession(session, true);
+  }
+
+  /**
+   * Forces a re-render of the preview for `templateUri`, or of the active preview when omitted.
+   * Returns false when no matching preview is open.
+   */
+  public async refresh(templateUri?: vscode.Uri): Promise<boolean> {
+    const session = this.resolveSession(templateUri);
+    if (!session) {
+      return false;
+    }
+
+    this.output.appendLine(`[preview] refresh requested for ${path.basename(session.templateUri.fsPath)}`);
+    await this.renderSession(session, true);
+    return true;
+  }
+
+  /** Returns the most recent successful render of the given (or active) preview, if any. */
+  public getRenderSnapshot(templateUri?: vscode.Uri): RenderSnapshot | undefined {
+    const session = this.resolveSession(templateUri);
+    const last = session?.lastSuccessful;
+    if (!session || !last) {
+      return undefined;
+    }
+
+    return {
+      templateUri: session.templateUri,
+      contextUri: last.contextUri,
+      rendered: last.rendered,
+      isHtml: last.isHtml,
+      renderedAt: last.renderedAt,
+      isStale: Boolean(session.renderState?.degraded),
+    };
+  }
+
+  public getRenderState(templateUri: vscode.Uri): PreviewRenderState | undefined {
+    return this.sessions.get(this.getKey(templateUri))?.renderState;
+  }
+
+  public hasPreview(templateUri: vscode.Uri): boolean {
+    return this.sessions.has(this.getKey(templateUri));
+  }
+
+  /** The template behind the focused preview panel, if a preview panel currently has focus. */
+  public getFocusedPreviewTemplate(): vscode.Uri | undefined {
+    for (const session of this.sessions.values()) {
+      if (session.panel.active) {
+        return session.templateUri;
+      }
+    }
+    return undefined;
+  }
+
+  public getViewMode(): ViewMode {
+    const stored = this.workspaceState.get<string>(VIEW_MODE_STATE_KEY);
+    if (isViewMode(stored)) {
+      return stored;
+    }
+
+    const configured = vscode.workspace.getConfiguration('goTemplateStudio').get<string>('defaultViewMode');
+    return isViewMode(configured) ? configured : 'html';
+  }
+
+  public async setViewMode(mode: ViewMode): Promise<void> {
+    await this.workspaceState.update(VIEW_MODE_STATE_KEY, mode);
+    this.output.appendLine(`[preview] view mode set to ${mode}`);
+    await this.broadcastViewMode();
+  }
+
+  /** Advances html -> text -> raw -> html and returns the new mode. */
+  public async cycleViewMode(): Promise<ViewMode> {
+    const current = VIEW_MODES.indexOf(this.getViewMode());
+    const next = VIEW_MODES[(current + 1) % VIEW_MODES.length];
+    await this.setViewMode(next);
+    return next;
+  }
+
+  private async broadcastViewMode(): Promise<void> {
+    const mode = this.getViewMode();
+    await Promise.all(
+      Array.from(this.sessions.values())
+        .filter((session) => session.initialized)
+        .map((session) =>
+          session.panel.webview.postMessage({
+            type: 'viewMode.update',
+            payload: { mode },
+          })
+        )
+    );
+  }
+
+  private resolveSession(templateUri?: vscode.Uri): PreviewSession | undefined {
+    if (templateUri) {
+      return this.sessions.get(this.getKey(templateUri));
+    }
+
+    for (const session of this.sessions.values()) {
+      if (session.panel.active) {
+        return session;
+      }
+    }
+
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const session = this.sessions.get(this.getKey(editor.document.uri));
+      if (session) {
+        return session;
+      }
+    }
+
+    if (this.lastActiveKey) {
+      const session = this.sessions.get(this.lastActiveKey);
+      if (session) {
+        return session;
+      }
+    }
+
+    return this.sessions.size === 1 ? this.sessions.values().next().value : undefined;
   }
 
   private async renderSession(session: PreviewSession, force = false): Promise<void> {
@@ -123,7 +325,12 @@ export class PreviewManager implements vscode.Disposable {
         session.lastSuccessful = {
           rendered: result.rendered,
           isHtml,
+          contextUri: session.contextUri,
+          renderedAt: new Date(),
         };
+        session.renderState = { degraded: false };
+      } else {
+        session.renderState = { degraded: true, message: result.errorMessage };
       }
 
       const payload = this.buildPreviewPayload(session, result, previewDiagnostics, isHtml);
@@ -156,12 +363,31 @@ export class PreviewManager implements vscode.Disposable {
       const message = error instanceof Error ? error.message : String(error);
       this.output.appendLine(`[preview] failed to render: ${message}`);
       this.diagnosticService.applyDiagnostics(session.templateUri, session.contextUri, []);
-      await session.panel.webview.postMessage({
-        type: 'error',
-        payload: {
-          message,
-        },
-      });
+      session.renderState = { degraded: true, message };
+
+      const fallback = session.lastSuccessful;
+      if (fallback) {
+        // Keep the last good output visible (with the error banner) instead of clearing the preview.
+        const payload: PreviewPayload = {
+          rendered: fallback.rendered,
+          diagnostics: [],
+          isHtml: fallback.isHtml,
+          durationMs: 0,
+          isStale: true,
+          errorMessage: message,
+          viewMode: this.getViewMode(),
+        };
+        await session.panel.webview.postMessage({ type: 'render', payload });
+      } else {
+        await session.panel.webview.postMessage({
+          type: 'error',
+          payload: {
+            message,
+          },
+        });
+      }
+    } finally {
+      this.onDidChangeStateEmitter.fire(session.templateUri);
     }
   }
 
@@ -204,7 +430,7 @@ export class PreviewManager implements vscode.Disposable {
       return;
     }
 
-    session.panel.webview.html = this.renderBaseHtml();
+    session.panel.webview.html = this.renderBaseHtml(this.getViewMode());
     session.messageSubscription?.dispose();
     session.messageSubscription = session.panel.webview.onDidReceiveMessage((message) => {
       void this.handleWebviewMessage(session, message);
@@ -229,6 +455,24 @@ export class PreviewManager implements vscode.Disposable {
       const line = typeof details.line === 'number' ? details.line : 0;
       const character = typeof details.character === 'number' ? details.character : 0;
       await this.revealRange(targetUri, line, character);
+      return;
+    }
+
+    if (type === 'preview.refresh') {
+      await this.refresh(session.templateUri);
+      return;
+    }
+
+    if (type === 'preview.export') {
+      await vscode.commands.executeCommand('goTemplateStudio.exportOutput', session.templateUri);
+      return;
+    }
+
+    if (type === 'viewMode.set' && payload && typeof payload === 'object') {
+      const { mode } = payload as { mode?: unknown };
+      if (isViewMode(mode)) {
+        await this.setViewMode(mode);
+      }
     }
   }
 
@@ -251,14 +495,7 @@ export class PreviewManager implements vscode.Disposable {
     result: RenderResult,
     diagnostics: PreviewDiagnostic[],
     isHtml: boolean
-  ): {
-    rendered: string;
-    diagnostics: PreviewDiagnostic[];
-    isHtml: boolean;
-    durationMs: number;
-    isStale: boolean;
-    errorMessage?: string;
-  } {
+  ): PreviewPayload {
     const useFallback = Boolean(result.errorMessage && session.lastSuccessful);
     const fallback = session.lastSuccessful;
     const rendered = useFallback ? fallback?.rendered ?? '' : result.rendered;
@@ -271,6 +508,7 @@ export class PreviewManager implements vscode.Disposable {
       durationMs: result.durationMs,
       isStale: useFallback,
       errorMessage: result.errorMessage,
+      viewMode: this.getViewMode(),
     };
   }
 
@@ -316,34 +554,108 @@ export class PreviewManager implements vscode.Disposable {
     }
   }
 
-  private renderBaseHtml(): string {
+  private renderBaseHtml(initialViewMode: ViewMode): string {
+    const nonce = randomBytes(16).toString('hex');
+    const modeButtons = VIEW_MODES.map(
+      (mode) =>
+        `<button type="button" class="toolbar-button mode-button" data-mode="${mode}" aria-pressed="${
+          mode === initialViewMode ? 'true' : 'false'
+        }" aria-label="${VIEW_MODE_LABELS[mode]} view" title="${VIEW_MODE_LABELS[mode]} view">${VIEW_MODE_LABELS[mode]}</button>`
+    ).join('\n          ');
+
+    // Note: style-src keeps 'unsafe-inline' because the sandboxed srcdoc iframe inherits this policy and
+    // rendered HTML templates commonly include inline <style> blocks. Scripts are nonce-restricted.
     return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';" />
     <title>Go Template Preview</title>
     <style>
       :root {
         color-scheme: light dark;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
       }
       body {
         margin: 0;
         display: flex;
-        flex-direction: row;
-        min-height: 100vh;
+        flex-direction: column;
+        height: 100vh;
         background: var(--vscode-editor-background);
         color: var(--vscode-editor-foreground);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+        background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+        font-size: 12px;
+      }
+      .toolbar-group {
+        display: inline-flex;
+        gap: 2px;
+      }
+      .toolbar-label {
+        margin-left: 8px;
+        opacity: 0.8;
+      }
+      .toolbar-button {
+        font: inherit;
+        padding: 3px 10px;
+        border-radius: 2px;
+        cursor: pointer;
+        border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder, transparent));
+        background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.15));
+        color: var(--vscode-button-secondaryForeground, inherit);
+      }
+      .toolbar-button:hover {
+        background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.25));
+      }
+      .toolbar-button:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+      }
+      .mode-button[aria-pressed="true"] {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border-color: var(--vscode-contrastActiveBorder, var(--vscode-button-background));
+        font-weight: 600;
+      }
+      .mode-button[aria-pressed="true"]:hover {
+        background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+      }
+      .mode-button.mode-button--unavailable {
+        text-decoration: line-through;
+      }
+      .toolbar-note {
+        font-style: italic;
+        color: var(--vscode-descriptionForeground, inherit);
+      }
+      .layout {
+        flex: 1;
+        display: flex;
+        flex-direction: row;
+        min-height: 0;
       }
       main {
         flex: 1;
         overflow: auto;
         position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      #preview-content {
+        flex: 1 0 auto;
+        display: flex;
+        flex-direction: column;
       }
       .preview-frame {
+        flex: 1;
         width: 100%;
-        height: 100vh;
+        min-height: 300px;
         border: none;
         background: white;
       }
@@ -434,17 +746,28 @@ export class PreviewManager implements vscode.Disposable {
       }
     </style>
   </head>
-  <body>
-    <main id="preview-main">
-      <div id="error" class="error-banner" aria-hidden="true"></div>
-      <div id="preview-content"></div>
-      <div id="preview-status" class="status" hidden></div>
-    </main>
-    <aside id="diagnostics" class="diagnostics" hidden>
-      <h2>Diagnostics</h2>
-      <ul id="diagnostics-list"></ul>
-    </aside>
-    <script>
+  <body data-view-mode="${initialViewMode}">
+    <header class="toolbar" role="toolbar" aria-label="Preview toolbar">
+      <button type="button" id="toolbar-refresh" class="toolbar-button" aria-label="Refresh preview" title="Refresh preview">Refresh</button>
+      <button type="button" id="toolbar-export" class="toolbar-button" aria-label="Export rendered output" title="Export rendered output">Export…</button>
+      <span class="toolbar-label" id="view-mode-label">View:</span>
+      <div class="toolbar-group" role="group" aria-labelledby="view-mode-label">
+          ${modeButtons}
+      </div>
+      <span id="view-mode-note" class="toolbar-note" aria-live="polite"></span>
+    </header>
+    <div class="layout">
+      <main id="preview-main">
+        <div id="error" class="error-banner" role="alert" aria-hidden="true"></div>
+        <div id="preview-content"></div>
+        <div id="preview-status" class="status" role="status" aria-live="polite" hidden></div>
+      </main>
+      <aside id="diagnostics" class="diagnostics" hidden>
+        <h2>Diagnostics</h2>
+        <ul id="diagnostics-list"></ul>
+      </aside>
+    </div>
+    <script nonce="${nonce}">
       (function() {
         const vscode = acquireVsCodeApi();
         const main = document.getElementById('preview-main');
@@ -453,6 +776,29 @@ export class PreviewManager implements vscode.Disposable {
         const diagnosticsList = document.getElementById('diagnostics-list');
         const status = document.getElementById('preview-status');
         const errorBanner = document.getElementById('error');
+        const viewModeNote = document.getElementById('view-mode-note');
+        const modeButtons = Array.prototype.slice.call(document.querySelectorAll('.mode-button'));
+        const VIEW_MODES = ['html', 'text', 'raw'];
+
+        let viewMode = VIEW_MODES.indexOf(document.body.dataset.viewMode) >= 0 ? document.body.dataset.viewMode : 'html';
+        let lastPayload = null;
+
+        document.getElementById('toolbar-refresh').addEventListener('click', () => {
+          vscode.postMessage({ type: 'preview.refresh' });
+        });
+        document.getElementById('toolbar-export').addEventListener('click', () => {
+          vscode.postMessage({ type: 'preview.export' });
+        });
+        modeButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const mode = button.getAttribute('data-mode');
+            if (VIEW_MODES.indexOf(mode) < 0 || mode === viewMode) {
+              return;
+            }
+            applyViewMode(mode);
+            vscode.postMessage({ type: 'viewMode.set', payload: { mode: mode } });
+          });
+        });
 
         function getState() {
           return vscode.getState() || { scroll: { main: 0, diagnostics: 0 }, selection: null };
@@ -546,8 +892,142 @@ export class PreviewManager implements vscode.Disposable {
           };
         }
 
+        const BLOCK_TAGS = new Set([
+          'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DD', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION',
+          'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HR', 'LI', 'MAIN',
+          'NAV', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'TR', 'UL',
+        ]);
+        const PARAGRAPH_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'TABLE', 'PRE', 'BLOCKQUOTE']);
+        const SKIPPED_TAGS = new Set(['HEAD', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE']);
+
+        // Plain-text ("simplified") rendering of HTML output. DOMParser documents are inert, so no
+        // scripts run and no resources load while extracting text.
+        function htmlToText(html) {
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          let out = '';
+
+          function appendText(text, preserveWhitespace) {
+            if (!preserveWhitespace && (out === '' || out.charAt(out.length - 1) === '\\n')) {
+              text = text.replace(/^ +/, '');
+            }
+            out += text;
+          }
+
+          function newline(count) {
+            out = out.replace(/ +$/, '');
+            if (out === '') {
+              return;
+            }
+            const trailing = out.length - out.replace(/\\n+$/, '').length;
+            for (let i = trailing; i < count; i++) {
+              out += '\\n';
+            }
+          }
+
+          function walk(node, inPre) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const value = node.nodeValue || '';
+              appendText(inPre ? value : value.replace(/\\s+/g, ' '), inPre);
+              return;
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+              return;
+            }
+            const tag = node.tagName;
+            if (SKIPPED_TAGS.has(tag)) {
+              return;
+            }
+            if (tag === 'BR') {
+              out += '\\n';
+              return;
+            }
+            const breaks = PARAGRAPH_TAGS.has(tag) ? 2 : BLOCK_TAGS.has(tag) ? 1 : 0;
+            if (breaks) {
+              newline(breaks);
+            }
+            if (tag === 'LI') {
+              appendText('\\u2022 ');
+            }
+            const childInPre = inPre || tag === 'PRE';
+            node.childNodes.forEach((child) => walk(child, childInPre));
+            if (breaks) {
+              newline(breaks);
+            } else if (tag === 'TD' || tag === 'TH') {
+              out += '\\t';
+            }
+          }
+
+          walk(doc.body || doc.documentElement, false);
+          return out.replace(/\\n{3,}/g, '\\n\\n').trim();
+        }
+
+        function effectiveViewMode(payload) {
+          if (viewMode === 'html' && payload && !payload.isHtml) {
+            return 'text';
+          }
+          return viewMode;
+        }
+
+        function updateToolbar(payload) {
+          const htmlUnavailable = Boolean(payload) && !payload.isHtml;
+          modeButtons.forEach((button) => {
+            const mode = button.getAttribute('data-mode');
+            button.setAttribute('aria-pressed', mode === viewMode ? 'true' : 'false');
+            if (mode === 'html') {
+              button.classList.toggle('mode-button--unavailable', htmlUnavailable);
+              button.title = htmlUnavailable ? 'HTML view (unavailable: this template renders text)' : 'HTML view';
+            }
+          });
+          viewModeNote.textContent =
+            htmlUnavailable && viewMode === 'html' ? 'Text output: showing Text view' : '';
+        }
+
+        function renderContent(payload) {
+          content.innerHTML = '';
+          const mode = effectiveViewMode(payload);
+          content.setAttribute('data-mode', mode);
+          if (mode === 'html') {
+            const frame = document.createElement('iframe');
+            frame.className = 'preview-frame';
+            frame.title = 'Rendered template output';
+            frame.setAttribute('sandbox', 'allow-same-origin');
+            frame.srcdoc = payload.rendered;
+            content.appendChild(frame);
+          } else {
+            const pre = document.createElement('pre');
+            pre.className = 'preview-code';
+            const code = document.createElement('code');
+            code.textContent = mode === 'text' && payload.isHtml ? htmlToText(payload.rendered) : payload.rendered;
+            pre.appendChild(code);
+            content.appendChild(pre);
+          }
+          updateToolbar(payload);
+        }
+
+        function applyViewMode(mode) {
+          if (VIEW_MODES.indexOf(mode) < 0) {
+            return;
+          }
+          const changed = mode !== viewMode;
+          viewMode = mode;
+          if (!lastPayload) {
+            updateToolbar(null);
+            return;
+          }
+          if (changed) {
+            renderContent(lastPayload);
+            main.scrollTop = 0;
+          } else {
+            updateToolbar(lastPayload);
+          }
+        }
+
         function renderPreview(payload) {
           const previous = captureState();
+          lastPayload = payload;
+          if (VIEW_MODES.indexOf(payload.viewMode) >= 0) {
+            viewMode = payload.viewMode;
+          }
 
           diagnosticsList.innerHTML = '';
           if (payload.diagnostics.length > 0) {
@@ -565,7 +1045,7 @@ export class PreviewManager implements vscode.Disposable {
               } else if (typeof diag.character === 'number') {
                 segments.push('Col ' + (diag.character + 1));
               }
-              const label = segments.join(' \u00B7 ');
+              const label = segments.join(' \\u00B7 ');
               button.textContent = (label ? label + ': ' : '') + diag.message;
               button.addEventListener('click', () => {
                 vscode.postMessage({
@@ -584,21 +1064,7 @@ export class PreviewManager implements vscode.Disposable {
             diagnostics.setAttribute('hidden', '');
           }
 
-          content.innerHTML = '';
-          if (payload.isHtml) {
-            const frame = document.createElement('iframe');
-            frame.className = 'preview-frame';
-            frame.setAttribute('sandbox', 'allow-same-origin');
-            frame.srcdoc = payload.rendered;
-            content.appendChild(frame);
-          } else {
-            const pre = document.createElement('pre');
-            pre.className = 'preview-code';
-            const code = document.createElement('code');
-            code.textContent = payload.rendered;
-            pre.appendChild(code);
-            content.appendChild(pre);
-          }
+          renderContent(payload);
 
           errorBanner.textContent = payload.errorMessage || '';
           if (payload.errorMessage) {
@@ -607,12 +1073,12 @@ export class PreviewManager implements vscode.Disposable {
             errorBanner.setAttribute('aria-hidden', 'true');
           }
 
+          const duration = payload.durationMs > 0 ? ' (' + payload.durationMs + ' ms)' : '';
           if (payload.errorMessage) {
             if (payload.isStale) {
-              status.textContent =
-                'Render failed, showing last successful result (' + payload.durationMs + ' ms)';
+              status.textContent = 'Render failed, showing last successful result' + duration;
             } else {
-              status.textContent = 'Render failed (' + payload.durationMs + ' ms)';
+              status.textContent = 'Render failed' + duration;
             }
             status.classList.add('status--stale');
           } else {
@@ -641,12 +1107,16 @@ export class PreviewManager implements vscode.Disposable {
             renderPreview(message.payload);
           } else if (message.type === 'error') {
             renderError(message.payload);
+          } else if (message.type === 'viewMode.update' && message.payload) {
+            applyViewMode(message.payload.mode);
           }
         });
 
+        updateToolbar(null);
         setScroll(getState());
 
         function renderError(payload) {
+          lastPayload = null;
           content.innerHTML = '';
           const pre = document.createElement('pre');
           pre.className = 'preview-code';
@@ -657,6 +1127,7 @@ export class PreviewManager implements vscode.Disposable {
           status.hidden = true;
           errorBanner.textContent = payload.message;
           errorBanner.setAttribute('aria-hidden', 'false');
+          updateToolbar(null);
         }
       })();
     </script>

@@ -70,7 +70,8 @@
 - Document in the quickstart that these helpers are pre-registered by the Go worker, and add unit coverage so regressions are caught if the worker code changes.
 
 ### 7.5 Multi-Format View Modes (Feature #6)
-- **Status:** ⏳ Pending. The preview currently offers only HTML/text rendering pathways without JSON/YAML toggles or graceful handling for unsupported conversions.
+- **Status:** 🟡 Partially complete. The preview toolbar has an HTML / Text / Raw view switch. The choice is persisted per workspace, defaults to the `goTemplateStudio.defaultViewMode` setting, and is reachable via `Go Template Studio: Toggle Preview View Mode`. HTML mode falls back to Text for text templates and the toolbar notes the fallback. Text mode strips HTML markup into a simplified plain-text view. Raw mode shows the rendered markup. JSON/YAML modes are still pending.
+- **Implementation notes:** View mode switching happens client-side in the webview (`src/services/previewManager.ts`), so changing modes does not trigger a re-render. The extension persists the choice in `workspaceState` and broadcasts it to every open preview.
 - Extend the existing view toggle to support HTML, plain text, raw template output, JSON, and YAML.
 - When JSON/YAML is selected, serialize the rendered Go template data structure (pre-HTML escaping) so teams producing config files can verify structure without extra tooling.
 - Highlight unsupported conversions gracefully (e.g., streaming binary data) with a toast explaining the limitation.
@@ -97,3 +98,9 @@
 - **CRUD:** `Create Context File` (view title **+**, command palette, and the empty-state button) writes a starter document in the chosen format, offers to create `context/` when it is missing, and offers to associate the new file with the active template. `Duplicate` and `Delete` are in the view's item context menu and fall back to a quick pick from the palette. Delete asks for confirmation in a modal and moves the file to the trash.
 - **Empty State (section 4):** A `viewsWelcome` entry shows **Create a sample context** when no context files exist, and an **Open Folder** prompt when no workspace is open.
 - **Follow-ups:** Schema hints are still open (TODO in `src/context/contextCommands.ts`). So are pruning associations to deleted contexts, multi-select delete, and persisting associations to `.vscode/goTemplateStudio.json`.
+
+### 7.10 Export & Status Bar Follow-Up (Journeys 2C, Section 3)
+- **Status:** ✅ Export and status bar shipped; follow-ups remain.
+- **Export:** The preview toolbar's `Export…` button, the editor title bar, and `Go Template Studio: Export Rendered Output` all offer `Save to File`, `Copy to Clipboard`, and `Save to File with Context Bundle`. The bundle is JSON written to `.gotemplatestudio/shares/`. Exports always use the last successful render. When the latest render failed, the quick pick says the exported output is stale. After saving, a confirmation offers `Open` and `Reveal`. Implementation: `src/services/exportService.ts`.
+- **Status bar:** A left-aligned item shows the active context (`$(json) <path>` or `No context`) for the focused template or preview and opens the context picker on click. It adds a `$(warning)` icon and a warning background when the last render failed and the preview fell back to its last good output.
+- **Follow-ups:** Bundles read template and context sources at export time, not render time (TODO in `exportService.ts`). Importing or opening a share bundle is not implemented. The status bar does not yet flag renderer degradation, such as `auto` mode falling back to `go run`, because `RendererService` does not surface the resolved mode (TODO in `src/extension.ts`). The toolbar does not yet have the `Context` quick pick or the telemetry toggle from Section 3.

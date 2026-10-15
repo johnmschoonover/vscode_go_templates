@@ -34,6 +34,16 @@ With the default `auto` renderer mode, no Go installation is required when a bun
 - **Empty state:** when no context files exist, the view shows a **Create a sample context** button.
 - **Parse errors:** YAML and TOML syntax errors are reported on the context file at the line (and, for TOML, column) the parser reports. JSON errors are reported on the file without a position.
 
+### Preview Toolbar, Export, and Status Bar
+- The preview opens with a toolbar offering **Refresh**, **Export…**, and a **View** switch:
+  - **HTML** renders HTML output in the isolated iframe. Text templates fall back to Text, and the toolbar notes the fallback.
+  - **Text** shows the output as plain text. For HTML output, markup is stripped to a simplified, readable form.
+  - **Raw** shows the rendered source with markup visible.
+- The chosen view mode is remembered per workspace. Until you choose one, `goTemplateStudio.defaultViewMode` (`html`, `text`, or `raw`) applies. **Go Template Studio: Toggle Preview View Mode** cycles the modes from the palette or a keybinding, and a keybinding can pass `"html"`, `"text"`, or `"raw"` as `args` to jump straight to one.
+- **Go Template Studio: Export Rendered Output** (palette, editor title bar, or the toolbar's Export button) exports the most recent successful render. You can save it to a file (the default name is derived from the template, e.g. `email.html` → `email.rendered.html`), copy it to the clipboard, or save it together with a context bundle. The bundle is a JSON file under `.gotemplatestudio/shares/` holding the template path and source, the context path and data, and the render time.
+- **Go Template Studio: Refresh Preview** forces a re-render of the active preview.
+- A status bar item shows the active context for the focused template, e.g. `context/asdf.json` or `No context`. Click it to switch contexts. It shows a warning icon when the last render failed and the preview is showing the last successful output.
+
 ### Sample Assets
 - `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
 - The sample context provides a `Title` string and an `Items` array; the template renders the title as both the document heading and HTML title and lists the array entries.
