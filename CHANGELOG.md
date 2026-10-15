@@ -11,14 +11,19 @@ First public release.
 - Live updates: the preview re-renders while you type (debounced) and on save, preserving scroll position, text selection, and diagnostics between renders.
 - Diagnostics for template and context errors, shown as VS Code squiggles and in the preview sidebar with clickable entries that jump to the offending location. The last successful output stays visible when a render fails, and the status footer reports render duration or fallback status.
 - Isolated iframe rendering for HTML output, inline code display for other outputs, and an error banner that does not reset the webview.
-- Context explorer tree view that lists context files from configured directories and lets you open or select them; directories and associations are configurable in `.vscode/goTemplateStudio.json`.
+- Context explorer tree view that lists JSON, YAML, and TOML context files from configured directories and lets you create, duplicate, delete, open, or select them, with an empty-state prompt to create a sample context; directories and associations are configurable in `.vscode/goTemplateStudio.json`.
+- YAML (`.yaml`, `.yml`) and TOML (`.toml`) context files render with the same data shapes as JSON, and parse errors report the offending line (and column for TOML).
+- Export rendered output to a file, to the clipboard, or to a file plus a shareable context bundle under `.gotemplatestudio/shares/`, from the preview toolbar, the editor title bar, or **Export Rendered Output**.
+- Preview toolbar with Refresh, Export, and an HTML / Text / Raw view mode toggle; the chosen mode is remembered per workspace and `goTemplateStudio.defaultViewMode` sets the initial mode.
+- Status bar item showing the active context for the focused template, with a warning when the last render failed; click it to switch context.
 - Built-in template helpers: `list`, `map`/`dict`, `default`, `join`, `safe`, `escape`, and string filters (`upper`, `lower`, `title`, `capitalize`, `trim`, `replace`).
 - **Go Templates** language mode (`.tmpl`, `.gotmpl`, `.tpl`) with TextMate syntax highlighting from the vendored [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template) grammar.
 - Bundled `go-worker` renderer binaries for `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`, with a `go run` fallback for development builds.
 - Settings `goTemplateStudio.goBinary` and `goTemplateStudio.rendererMode` (`auto`, `bundled`, `system`).
-- Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, and Open Context File.
+- Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, Open Context File, Create/Duplicate/Delete Context File, Export Rendered Output, Refresh Preview, and Toggle Preview View Mode.
 - Marketplace packaging: extension icon, gallery banner, keywords, Sponsor link, and a **Buy me a coffee** button on the welcome notification.
 - Contributor docs: `CONTRIBUTING.md`, GitHub issue templates, and a pull request template.
+- Vitest unit-test harness for the extension services, plus CI checks for unit tests, `gofmt`, `go vet`, and VSIX packaging.
 
 ### Fixed
 - The editor title preview button now matches the contributed `go-templates` language id (plus `.tmpl`, `.tpl`, and `.gotmpl` extensions).

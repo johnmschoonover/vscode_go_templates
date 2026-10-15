@@ -1,6 +1,7 @@
 # Exclude development and build-only assets
 .github/**
 .vscode/**
+.claude/**
 src/**
 test/**
 vitest.config.ts

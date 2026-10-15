@@ -12,7 +12,7 @@
 ## 2. Activation & Lifecycle
 - **Activation Events:**
   - `onLanguage:gotemplate` (custom language ID for `.tmpl`, `.tpl`, `.gotmpl`).
-  - `onCommand:goTemplateStudio.preview`, `onCommand:goTemplateStudio.selectContext`, `onCommand:goTemplateStudio.export`.
+  - `onCommand:goTemplateStudio.preview`, `onCommand:goTemplateStudio.selectContext`, `onCommand:goTemplateStudio.exportOutput`.
   - `workspaceContains:**/templates/*.tmpl` to auto-enable in common project structures.
 - **Deactivation:** Disposes preview panels, kills Go worker processes, and flushes telemetry queue (if opted-in).
 

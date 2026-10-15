@@ -89,7 +89,9 @@ With the default `auto` renderer mode, no Go installation is required when a bun
   ```
 
 ## Next Steps
-1. Build the Webview-based preview and export workflow once rendering pipelines are in place.
+1. Side-by-side layout controls and one preview per open template (see `ux_brief.md` section 7.2).
+2. JSON and YAML preview view modes and a render diff workflow (`ux_brief.md` sections 7.5 and 7.6).
+3. Integration tests with `@vscode/test-electron` (see `testing_plan.md`).
 
 ## Support the Project
 Go Template Studio is free and open source. If it saves you time, you can [buy me a coffee](https://buymeacoffee.com/johnmschoonover) to support continued development. The Sponsor button on the Marketplace listing and GitHub repository links to the same page.
