@@ -2,7 +2,7 @@
   "name": "go-template-studio",
   "displayName": "Go Template Studio",
   "description": "A Visual Studio Code extension for working with Go templates, providing syntax highlighting, previewing, and context management.",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "publisher": "johnmschoonover",
   "repository": {
     "type": "git",
@@ -50,8 +50,15 @@
     "languages": [
       {
         "id": "go-templates",
-        "aliases": ["Go Templates", "go templates"],
-        "extensions": [".gotmpl", ".tmpl", ".tpl"],
+        "aliases": [
+          "Go Templates",
+          "go templates"
+        ],
+        "extensions": [
+          ".gotmpl",
+          ".tmpl",
+          ".tpl"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -207,13 +214,21 @@
         },
         "goTemplateStudio.rendererMode": {
           "type": "string",
-          "enum": ["auto", "bundled", "system"],
+          "enum": [
+            "auto",
+            "bundled",
+            "system"
+          ],
           "default": "auto",
           "description": "Select which renderer to use: auto prefers bundled binaries, bundled requires them, system always uses the configured Go binary."
         },
         "goTemplateStudio.defaultViewMode": {
           "type": "string",
-          "enum": ["html", "text", "raw"],
+          "enum": [
+            "html",
+            "text",
+            "raw"
+          ],
           "enumDescriptions": [
             "Render HTML output in an isolated frame (text templates fall back to Text).",
             "Show the rendered output as plain text; HTML markup is stripped.",
@@ -224,7 +239,10 @@
         },
         "goTemplateStudio.preview.layout": {
           "type": "string",
-          "enum": ["beside", "below"],
+          "enum": [
+            "beside",
+            "below"
+          ],
           "enumDescriptions": [
             "Open the preview in an editor group beside the template.",
             "Open the preview in a new editor group below the template."

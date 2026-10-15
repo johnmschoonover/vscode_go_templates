@@ -1,7 +1,7 @@
 # Operational Readiness Checklist: Go Template Studio for VS Code
 
 ## 1. Release Management
-- **Versioning:** Follow semantic versioning (`0.y.z` during MVP). Document changes in `CHANGELOG.md` (✅ created; `0.1.0` entry drafted).
+- **Versioning:** Follow semantic versioning. The git tag must match the `package.json` version (`v1.1.0` ↔ `1.1.0`); earlier `v1.0.x` tags predate this rule. Document changes in `CHANGELOG.md` (✅ created; `1.1.0` entry drafted).
 - **Packaging Workflow:**
   1. Run `npm run build` and ensure output passes lint/tests.
   2. Execute `vsce package` to produce `.vsix` artifact.

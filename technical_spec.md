@@ -83,7 +83,7 @@
 - Respect VS Code network policy and avoid external calls without user action.
 
 ## 8. Packaging & Deployment
-- Use `vsce` for packaging; configure semantic versioning (start at `0.1.0`).
+- Use `vsce` for packaging; configure semantic versioning (the manifest version must match the release tag; `1.1.0` is the first release that follows this).
 - Minimize extension bundle size by compiling TypeScript to ES2019 and tree-shaking dependencies.
 - Publish under an open-source license (e.g., MIT) with marketplace listing that clearly states the extension is free.
 - Provide sample templates and contexts in the repository `/samples` directory for discoverability.

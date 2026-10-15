@@ -2,9 +2,9 @@
 
 All notable changes to Go Template Studio are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/) (`0.y.z` during the MVP).
 
-## [0.1.0] - Unreleased
+## [1.1.0] - Unreleased
 
-First public release.
+First feature release after the `v1.0.x` packaging tags. Earlier tags shipped the manifest as version 0.0.1; from this release on the manifest version and the git tag match.
 
 ### Added
 - Side-by-side preview of Go `text/template` and `html/template` files, rendered by a Go worker against the selected context file (or an empty context via **Render without context**).
@@ -37,4 +37,4 @@ First public release.
 - The `go run` renderer fallback no longer needs network access or a warm Go module cache (the worker's dependencies are vendored) and ignores unrelated `go.work` files (`GOWORK=off`).
 - Command Palette entries no longer repeat the category ("Go Template Studio: Go Template Studio: …").
 
-[0.1.0]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v0.1.0
+[1.1.0]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v1.1.0
