@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in Go Template Studio is not working as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as you can.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal template and context file (JSON) if possible.
+      placeholder: |
+        1. Open ...
+        2. Run "Go Template Studio: Preview Template"
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      placeholder: e.g. 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      description: Help > About
+      placeholder: e.g. 1.90.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and architecture
+      placeholder: e.g. macOS 14 arm64, Windows 11 x64, Ubuntu 24.04 x64
+    validations:
+      required: true
+  - type: dropdown
+    id: renderer-mode
+    attributes:
+      label: Renderer mode
+      description: The value of the goTemplateStudio.rendererMode setting.
+      options:
+        - auto (default)
+        - bundled
+        - system
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: Paste any diagnostics from the preview sidebar or output. This is rendered as code automatically.
+      render: shell
+    validations:
+      required: false

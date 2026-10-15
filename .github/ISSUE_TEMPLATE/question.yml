@@ -1,0 +1,29 @@
+name: Question
+description: Ask a question about using Go Template Studio.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [README](https://github.com/johnmschoonover/vscode_go_templates#readme) and [Quickstart](https://github.com/johnmschoonover/vscode_go_templates/blob/main/docs/quickstart.md) first.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Include relevant template snippets, settings, or error messages.
+    validations:
+      required: false
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      placeholder: e.g. 1.1.0
+    validations:
+      required: false

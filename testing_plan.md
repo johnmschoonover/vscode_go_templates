@@ -11,15 +11,21 @@
 - **Fallback Scenario:** VS Code environment without Go to validate degraded experience messaging.
 
 ## 3. Automated Testing
-- **Unit Tests (TypeScript):**
-  - Run via `npm test` using `vitest` or `mocha` with `ts-node` for services (context manager, configuration, telemetry wrapper).
-  - Target coverage: 80% statements for core services.
-- **Integration Tests:**
-  - Use `@vscode/test-electron` to open a sample workspace and verify preview command wiring, WebView messaging, and export outputs.
+- **Unit Tests (TypeScript) -- implemented:**
+  - Harness: [`vitest`](https://vitest.dev) (v2, Node 18+ compatible). Tests live in `test/unit/**/*.test.ts`, outside `src/`, so they are never compiled into `dist/` or shipped in the VSIX (`.vscodeignore` also excludes `test/**`).
+  - Commands: `npm run test:unit` (one-shot), `npm run test:unit:watch` (watch mode), `npm run typecheck:test` (type-checks the tests via `tsconfig.test.json`). `npm test` runs the unit suite and then the Go worker tests.
+  - Mock strategy: the `vscode` module only exists inside the extension host, so `vitest.config.ts` aliases it to `test/__mocks__/vscode.ts` (and `tsconfig.test.json` maps it for type checking). The mock implements only the API surface the tested modules touch (`Uri`, `Range`, `Position`, `Diagnostic`, `DiagnosticSeverity`, `EventEmitter`, `Disposable`, `RelativePattern`, `FileType`, `languages.createDiagnosticCollection`, `workspace.workspaceFolders/getConfiguration/asRelativePath/fs/createFileSystemWatcher/textDocuments` and document/configuration events, `window.createOutputChannel/createWebviewPanel/activeTextEditor/onDidChangeActiveTextEditor/showTextDocument/setStatusBarMessage`, `ViewColumn`, `commands.executeCommand`). Workspace state is driven through the `__test` helper (virtual in-memory filesystem, workspace root, watcher event simulation, webview panel stubs, active editor changes, executed and failing commands); call `__test.reset()` in `beforeEach`. Extend the mock when a new module comes under test rather than reaching for the real API.
+  - Currently covered: `diagnosticService` (severity mapping, 1-based to 0-based positions, Go `template: name:L:C:` message parsing, file routing, clearing), `configurationService` (defaults, partial/malformed config, watcher reloads), `contextAssociationManager` (set/get, default-context fallback, config-change behavior), `ContextStore` in `contextManager` (scan, extension filter, labels, sorting, watchers), `previewLayout` (layout resolution, placement, follow-editor rules), `renderStatus` (renderer fallback detection, status bar and footer wording), `previewManager` (one panel per template, reveal on re-run, `below` layout, follow active editor, close/dispose, renderer mode in render state, HTML template detection, export target fallback, context usage lookup), and `rendererService` (snapshot diagnostics mapped back to the edited files, snapshot cleanup, system fallback arguments and environment; `child_process.spawn` is mocked with `vi.mock`).
+  - TODO: cover `rendererService` (argument building / response normalization) and the remaining `previewManager` paths (live re-render scheduling, webview messages, view mode broadcast); enforce the 80% statement coverage target for core services (add `@vitest/coverage-v8` and a threshold) once more services have tests.
+- **Integration Tests -- TODO (not implemented):**
+  - Use `@vscode/test-electron` to open a sample workspace and verify preview command wiring, WebView messaging, and export outputs. This needs a VS Code download and, on Linux CI, `xvfb-run`, so it is deferred. See `test/integration/README.md` for the intended layout and setup steps.
   - Mock Go worker responses to simulate success/error paths.
 - **Go Worker Tests:**
-  - Standard Go unit tests covering template compilation, context loading, and error normalization.
+  - Standard Go unit tests covering template compilation, context loading, and error normalization (`npm run test:templates`).
+  - CI also enforces `gofmt -l` on the worker sources, skipping the vendored modules in `go-worker/vendor/` (must print nothing), and `go vet ./...`.
   - Include fuzz tests for unsafe template input once MVP stabilizes (post-launch).
+- **Packaging Check (CI):**
+  - The CI workflow runs `npx @vscode/vsce package` on every push/PR and uploads the resulting VSIX as a workflow artifact (`go-template-studio-vsix`), so manifest or `.vscodeignore` problems are caught before a release. vsce 3.x requires Node 20, so the CI job runs on Node 20. The release workflow remains responsible for bundling per-platform Go binaries.
 
 ## 4. Manual Testing
 - **Smoke Suite (per release):**
@@ -34,7 +40,7 @@
   - Remote environment latency checks (Codespaces).
 
 ## 5. Tooling & Automation
-- GitHub Actions workflow running `npm install`, `npm test`, `go test ./...`, and integration smoke tests on macOS/Linux.
+- GitHub Actions workflow running `npm ci`, lint, typecheck, `npm run test:unit`, Go format/vet/tests, and a VSIX packaging check on Linux (integration smoke tests and macOS/Windows runners are still TODO).
 - Pre-commit hook (optional) to run linting (`eslint`) and format (`prettier` + `gofmt`).
 - Release checklist requiring tests to pass before `vsce publish`.
 

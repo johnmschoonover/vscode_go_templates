@@ -15,7 +15,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -31,11 +31,42 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Type check unit tests
+        run: npm run typecheck:test
+
       - name: Compile
         run: npm run compile
 
       - name: Verify vendored grammar
         run: npm run verify:grammar
 
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Check Go formatting
+        run: |
+          # go-worker/vendor holds third-party modules verbatim; only check our own sources.
+          unformatted="$(find go-worker -path go-worker/vendor -prune -o -name '*.go' -print | xargs gofmt -l)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Go vet
+        working-directory: go-worker
+        run: go vet ./...
+
       - name: Template tests
-        run: npm run test
+        run: npm run test:templates
+
+      # vsce 3.x requires Node >= 20 (hence the Node version above); the pin keeps CI reproducible.
+      - name: Package VSIX
+        run: npx -y @vscode/vsce@3.9.2 package --out go-template-studio.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-template-studio-vsix
+          path: go-template-studio.vsix
+          if-no-files-found: error

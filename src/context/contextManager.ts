@@ -3,13 +3,41 @@ import * as vscode from 'vscode';
 import { ConfigurationService } from '../services/configurationService';
 import type { WorkspaceConfiguration } from '../services/configurationService';
 
+export type ContextFormat = 'json' | 'yaml' | 'toml';
+
 export interface ContextDescriptor {
   uri: vscode.Uri;
   label: string;
   relativePath: string;
+  format: ContextFormat;
 }
 
-const SUPPORTED_EXTENSIONS = ['.json', '.yaml', '.yml', '.toml'];
+/**
+ * File extensions the Go worker can decode (see `contextFormatForPath` in
+ * go-worker/main.go). Keep both lists in sync when adding formats.
+ */
+export const SUPPORTED_CONTEXT_EXTENSIONS: readonly string[] = ['.json', '.yaml', '.yml', '.toml'];
+
+export const CONTEXT_FORMAT_LABELS: Readonly<Record<ContextFormat, string>> = {
+  json: 'JSON',
+  yaml: 'YAML',
+  toml: 'TOML',
+};
+
+/** Returns the context format for a file name, or undefined when unsupported. */
+export function contextFormatFromFileName(fileName: string): ContextFormat | undefined {
+  switch (path.extname(fileName).toLowerCase()) {
+    case '.json':
+      return 'json';
+    case '.yaml':
+    case '.yml':
+      return 'yaml';
+    case '.toml':
+      return 'toml';
+    default:
+      return undefined;
+  }
+}
 
 export class ContextStore implements vscode.Disposable {
   private readonly onDidChangeEmitter = new vscode.EventEmitter<void>();
@@ -42,6 +70,16 @@ export class ContextStore implements vscode.Disposable {
     return this.contexts;
   }
 
+  /** Context directories (workspace-relative) from `.vscode/goTemplateStudio.json`. */
+  public getContextDirectories(): string[] {
+    return [...this.configuration.contextDirs];
+  }
+
+  public findByUri(uri: vscode.Uri): ContextDescriptor | undefined {
+    const target = uri.toString();
+    return this.contexts.find((descriptor) => descriptor.uri.toString() === target);
+  }
+
   public dispose(): void {
     this.watchers.forEach((watcher) => watcher.dispose());
     this.onDidChangeEmitter.dispose();
@@ -57,6 +95,8 @@ export class ContextStore implements vscode.Disposable {
     }
 
     for (const dir of this.configuration.contextDirs) {
+      // Watch every file (not just SUPPORTED_CONTEXT_EXTENSIONS) so folder
+      // deletions and renames also trigger a rescan; the scan filters formats.
       const pattern = new vscode.RelativePattern(folder, `${dir}/**/*`);
       const watcher = vscode.workspace.createFileSystemWatcher(pattern);
       watcher.onDidChange(() => void this.refresh());
@@ -102,7 +142,8 @@ export class ContextStore implements vscode.Disposable {
         continue;
       }
 
-      if (!SUPPORTED_EXTENSIONS.includes(path.extname(name).toLowerCase())) {
+      const format = contextFormatFromFileName(name);
+      if (!format) {
         continue;
       }
 
@@ -110,6 +151,7 @@ export class ContextStore implements vscode.Disposable {
         uri: entryUri,
         label: path.basename(name, path.extname(name)),
         relativePath,
+        format,
       });
     }
   }

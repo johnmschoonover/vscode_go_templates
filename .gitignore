@@ -4,3 +4,6 @@ dist/
 *.vsix
 npm-debug.log*
 yarn-error.log
+
+# Temporary agent worktrees
+.claude/worktrees/

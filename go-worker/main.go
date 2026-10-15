@@ -16,6 +16,9 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 type diagnostic struct {
@@ -72,6 +75,11 @@ func execute(templatePath, contextPath string) response {
 		if strings.TrimSpace(contextPath) != "" {
 			diag.File = contextPath
 		}
+		var parseErr *contextParseError
+		if errors.As(err, &parseErr) {
+			diag.Line = parseErr.line
+			diag.Column = parseErr.column
+		}
 		return response{
 			Diagnostics: []diagnostic{diag},
 			Error:       err.Error(),
@@ -120,6 +128,40 @@ func extractTemplatePosition(diag *diagnostic) {
 	}
 }
 
+// contextFormat identifies the serialization used by a context data file.
+type contextFormat string
+
+const (
+	contextFormatJSON contextFormat = "JSON"
+	contextFormatYAML contextFormat = "YAML"
+	contextFormatTOML contextFormat = "TOML"
+)
+
+// contextFormatForPath selects a decoder based on the file extension. Unknown
+// extensions fall back to JSON to preserve the original worker behavior.
+func contextFormatForPath(path string) contextFormat {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".yaml", ".yml":
+		return contextFormatYAML
+	case ".toml":
+		return contextFormatTOML
+	default:
+		return contextFormatJSON
+	}
+}
+
+// contextParseError reports a context decoding failure along with the 1-based
+// line and column when the underlying decoder exposes them (0 when unknown).
+type contextParseError struct {
+	message string
+	line    int
+	column  int
+}
+
+func (e *contextParseError) Error() string {
+	return e.message
+}
+
 func loadContext(contextPath string) (interface{}, error) {
 	if strings.TrimSpace(contextPath) == "" {
 		return map[string]any{}, nil
@@ -130,28 +172,158 @@ func loadContext(contextPath string) (interface{}, error) {
 		return nil, err
 	}
 
-	return parseContext(contextBytes)
+	return parseContext(contextBytes, contextFormatForPath(contextPath))
 }
 
-func parseContext(content []byte) (interface{}, error) {
+func parseContext(content []byte, format contextFormat) (interface{}, error) {
 	trimmed := strings.TrimSpace(string(content))
 	if trimmed == "" {
 		return map[string]any{}, nil
 	}
 
+	switch format {
+	case contextFormatYAML:
+		return parseYAMLContext(content)
+	case contextFormatTOML:
+		return parseTOMLContext(content)
+	default:
+		var data interface{}
+		if err := json.Unmarshal([]byte(trimmed), &data); err != nil {
+			return nil, errors.New("failed to parse context JSON")
+		}
+		return data, nil
+	}
+}
+
+// yamlLinePattern matches the position prefix yaml.v3 embeds in its error
+// messages, e.g. "yaml: line 3: mapping values are not allowed".
+var yamlLinePattern = regexp.MustCompile(`line (\d+)(?:, column (\d+))?`)
+
+func parseYAMLContext(content []byte) (interface{}, error) {
+	// Decode the untrimmed content so reported line numbers match the file.
 	var data interface{}
-	if err := json.Unmarshal([]byte(trimmed), &data); err != nil {
-		return nil, errors.New("failed to parse context JSON")
+	if err := yaml.Unmarshal(content, &data); err != nil {
+		parseErr := &contextParseError{message: "failed to parse context YAML: " + err.Error()}
+		if matches := yamlLinePattern.FindStringSubmatch(err.Error()); matches != nil {
+			parseErr.line, _ = strconv.Atoi(matches[1])
+			if matches[2] != "" {
+				parseErr.column, _ = strconv.Atoi(matches[2])
+			}
+		}
+		return nil, parseErr
 	}
 
-	return data, nil
+	if data == nil {
+		// A document containing only comments decodes to nil.
+		return map[string]any{}, nil
+	}
+
+	return normalizeContextValue(data), nil
+}
+
+func parseTOMLContext(content []byte) (interface{}, error) {
+	data := map[string]interface{}{}
+	if _, err := toml.Decode(string(content), &data); err != nil {
+		parseErr := &contextParseError{message: "failed to parse context TOML: " + err.Error()}
+		var tomlErr toml.ParseError
+		if errors.As(err, &tomlErr) {
+			parseErr.line = tomlErr.Position.Line
+			parseErr.column = tomlErr.Position.Col
+		}
+		return nil, parseErr
+	}
+
+	return normalizeContextValue(data), nil
+}
+
+// normalizeContextValue converts decoder-specific types into the shapes
+// encoding/json produces so templates behave identically regardless of the
+// context file format: containers become map[string]interface{} and
+// []interface{}, every integer and float type becomes float64 (as JSON numbers
+// do), and dates/times become strings.
+func normalizeContextValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed)
+	case int8:
+		return float64(typed)
+	case int16:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case uint:
+		return float64(typed)
+	case uint8:
+		return float64(typed)
+	case uint16:
+		return float64(typed)
+	case uint32:
+		return float64(typed)
+	case uint64:
+		return float64(typed)
+	case float32:
+		return float64(typed)
+	case time.Time:
+		return formatContextTime(typed)
+	case map[string]interface{}:
+		for key, item := range typed {
+			typed[key] = normalizeContextValue(item)
+		}
+		return typed
+	case map[interface{}]interface{}:
+		converted := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			converted[fmt.Sprint(key)] = normalizeContextValue(item)
+		}
+		return converted
+	case []interface{}:
+		for i, item := range typed {
+			typed[i] = normalizeContextValue(item)
+		}
+		return typed
+	case []map[string]interface{}:
+		converted := make([]interface{}, len(typed))
+		for i, item := range typed {
+			converted[i] = normalizeContextValue(item)
+		}
+		return converted
+	default:
+		return value
+	}
+}
+
+// TOML local date/time values decode with these zone names (see the toml
+// package's internal LocalDatetime/LocalDate/LocalTime locations); they carry
+// no real offset, so they are formatted without one.
+const (
+	tomlLocalDatetimeZone = "datetime-local"
+	tomlLocalDateZone     = "date-local"
+	tomlLocalTimeZone     = "time-local"
+)
+
+// formatContextTime renders decoded dates/times as RFC 3339 strings (the
+// full-date or partial-time subset for TOML local dates and times) so a
+// context value has the same type it would have when written as a JSON string.
+func formatContextTime(value time.Time) string {
+	switch value.Location().String() {
+	case tomlLocalDatetimeZone:
+		return value.Format("2006-01-02T15:04:05.999999999")
+	case tomlLocalDateZone:
+		return value.Format("2006-01-02")
+	case tomlLocalTimeZone:
+		return value.Format("15:04:05.999999999")
+	default:
+		return value.Format(time.RFC3339Nano)
+	}
 }
 
 func renderTemplate(path, content string, data interface{}) (string, error) {
 	name := filepath.Base(path)
 	var execute func(interface{}) (string, error)
 
-	if isHTMLTemplate(path) {
+	if isHTMLTemplate(path, content) {
 		execute = func(value interface{}) (string, error) {
 			tmpl, err := htmltmpl.New(name).Funcs(htmlFuncMap()).Parse(content)
 			if err != nil {
@@ -182,9 +354,35 @@ func renderTemplate(path, content string, data interface{}) (string, error) {
 	return execute(data)
 }
 
-func isHTMLTemplate(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasSuffix(lower, ".html") || strings.HasSuffix(lower, ".htm")
+// templateExtensions are the Go template file extensions contributed by the
+// extension; an HTML extension directly before one (email.html.tmpl) marks the
+// template as HTML.
+var templateExtensions = map[string]bool{".tmpl": true, ".tpl": true, ".gotmpl": true}
+
+// htmlDocumentPattern matches content that starts with an HTML doctype or
+// <html> element (case-insensitive, after optional ASCII whitespace).
+var htmlDocumentPattern = regexp.MustCompile(`(?i)^[\t\n\f\r ]*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])`)
+
+// isHTMLTemplate reports whether a template renders HTML and should therefore
+// use html/template (contextual escaping). The rule must stay in sync with
+// isHtmlTemplate in src/services/previewManager.ts, which picks the preview's
+// HTML view: a .html/.htm extension, an inner .html/.htm extension before a
+// template extension (page.html.tmpl), or otherwise content that starts with
+// an HTML doctype or <html> element.
+func isHTMLTemplate(path, content string) bool {
+	lower := strings.ToLower(filepath.Base(path))
+	ext := filepath.Ext(lower)
+	if ext == ".html" || ext == ".htm" {
+		return true
+	}
+	if templateExtensions[ext] {
+		inner := filepath.Ext(strings.TrimSuffix(lower, ext))
+		if inner == ".html" || inner == ".htm" {
+			return true
+		}
+	}
+
+	return htmlDocumentPattern.MatchString(strings.TrimPrefix(content, "\ufeff"))
 }
 
 func templateList(values ...interface{}) []interface{} {

@@ -2,7 +2,7 @@
   "name": "go-template-studio",
   "displayName": "Go Template Studio",
   "description": "A Visual Studio Code extension for working with Go templates, providing syntax highlighting, previewing, and context management.",
-  "version": "0.0.1",
+  "version": "1.1.0",
   "publisher": "johnmschoonover",
   "repository": {
     "type": "git",
@@ -16,10 +16,29 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/johnmschoonover"
+  },
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
   "categories": [
+    "Programming Languages",
     "Other"
   ],
+  "keywords": [
+    "go",
+    "golang",
+    "template",
+    "text/template",
+    "html/template",
+    "preview",
+    "gotmpl"
+  ],
   "activationEvents": [
+    "onLanguage:go-templates",
     "onCommand:goTemplateStudio.showWelcome",
     "onCommand:goTemplateStudio.preview",
     "onCommand:goTemplateStudio.selectContext",
@@ -31,8 +50,15 @@
     "languages": [
       {
         "id": "go-templates",
-        "aliases": ["Go Templates", "go templates"],
-        "extensions": [".gotmpl", ".tmpl"],
+        "aliases": [
+          "Go Templates",
+          "go templates"
+        ],
+        "extensions": [
+          ".gotmpl",
+          ".tmpl",
+          ".tpl"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -46,28 +72,72 @@
     "commands": [
       {
         "command": "goTemplateStudio.showWelcome",
-        "title": "Go Template Studio: Show Welcome",
+        "title": "Show Welcome",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.preview",
-        "title": "Go Template Studio: Preview Template",
+        "title": "Preview Template",
         "category": "Go Template Studio",
         "icon": "$(preview)"
       },
       {
         "command": "goTemplateStudio.selectContext",
-        "title": "Go Template Studio: Select Context",
+        "title": "Select Context",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.refreshContexts",
-        "title": "Go Template Studio: Refresh Contexts",
-        "category": "Go Template Studio"
+        "title": "Refresh Contexts",
+        "category": "Go Template Studio",
+        "icon": "$(refresh)"
       },
       {
         "command": "goTemplateStudio.openContextFile",
-        "title": "Go Template Studio: Open Context File",
+        "title": "Open Context File",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.createContext",
+        "title": "Create Context File",
+        "category": "Go Template Studio",
+        "icon": "$(add)"
+      },
+      {
+        "command": "goTemplateStudio.duplicateContext",
+        "title": "Duplicate Context File",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.deleteContext",
+        "title": "Delete Context File",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.exportOutput",
+        "title": "Export Rendered Output",
+        "category": "Go Template Studio",
+        "icon": "$(export)"
+      },
+      {
+        "command": "goTemplateStudio.refreshPreview",
+        "title": "Refresh Preview",
+        "category": "Go Template Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "goTemplateStudio.toggleViewMode",
+        "title": "Toggle Preview View Mode",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.toggleSideBySidePreview",
+        "title": "Toggle Side-by-Side Preview",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.setPreviewLayout",
+        "title": "Set Preview Layout",
         "category": "Go Template Studio"
       }
     ],
@@ -76,7 +146,41 @@
         {
           "command": "goTemplateStudio.preview",
           "group": "navigation@99",
-          "when": "resourceLangId == go-templates || resourceLangId == gotemplate || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+          "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+        },
+        {
+          "command": "goTemplateStudio.exportOutput",
+          "group": "navigation@100",
+          "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "goTemplateStudio.createContext",
+          "when": "view == goTemplateStudio.contextExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "goTemplateStudio.refreshContexts",
+          "when": "view == goTemplateStudio.contextExplorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "goTemplateStudio.openContextFile",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "navigation@1"
+        },
+        {
+          "command": "goTemplateStudio.duplicateContext",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "goTemplateStudio.deleteContext",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "7_modification@2"
         }
       ]
     },
@@ -88,6 +192,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "goTemplateStudio.contextExplorer",
+        "contents": "No context files found. Context files supply the data your templates render with, in JSON, YAML, or TOML.\n[Create a sample context](command:goTemplateStudio.createContext)\nContext files are discovered in the contextDirs listed in .vscode/goTemplateStudio.json (default: context/).",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "goTemplateStudio.contextExplorer",
+        "contents": "Open a folder to discover and create context files.\n[Open Folder](command:vscode.openFolder)",
+        "when": "workspaceFolderCount == 0"
+      }
+    ],
     "configuration": {
       "title": "Go Template Studio",
       "properties": {
@@ -98,9 +214,46 @@
         },
         "goTemplateStudio.rendererMode": {
           "type": "string",
-          "enum": ["auto", "bundled", "system"],
+          "enum": [
+            "auto",
+            "bundled",
+            "system"
+          ],
           "default": "auto",
           "description": "Select which renderer to use: auto prefers bundled binaries, bundled requires them, system always uses the configured Go binary."
+        },
+        "goTemplateStudio.defaultViewMode": {
+          "type": "string",
+          "enum": [
+            "html",
+            "text",
+            "raw"
+          ],
+          "enumDescriptions": [
+            "Render HTML output in an isolated frame (text templates fall back to Text).",
+            "Show the rendered output as plain text; HTML markup is stripped.",
+            "Show the rendered output source with markup visible."
+          ],
+          "default": "html",
+          "description": "Preview view mode used until a mode is chosen from the preview toolbar or the Toggle Preview View Mode command (that choice is remembered per workspace)."
+        },
+        "goTemplateStudio.preview.layout": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "below"
+          ],
+          "enumDescriptions": [
+            "Open the preview in an editor group beside the template.",
+            "Open the preview in a new editor group below the template."
+          ],
+          "default": "beside",
+          "description": "Where new previews open, until a layout is chosen with the Set Preview Layout command (that choice is remembered per workspace). Open previews stay where they are."
+        },
+        "goTemplateStudio.preview.followActiveEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "When you switch to a template that has an open preview, reveal that preview in its editor group without taking focus."
         }
       }
     }
@@ -110,8 +263,11 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "typecheck": "tsc -p ./ --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint src --ext ts",
-    "test": "npm run test:templates",
+    "test": "npm run test:unit && npm run test:templates",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "test:templates": "cd go-worker && go test ./...",
     "update:grammar": "node ./scripts/update-go-template-grammar.mjs",
     "verify:grammar": "node ./scripts/check-go-template-grammar.mjs"
@@ -122,7 +278,8 @@
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.85.0",
     "eslint": "^8.56.0",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "vitest": "^2.1.9"
   },
   "dependencies": {}
 }

@@ -1,7 +1,11 @@
 # Exclude development and build-only assets
 .github/**
 .vscode/**
+.claude/**
 src/**
+test/**
+vitest.config.ts
+tsconfig.test.json
 **/*.test.*
 **/*.spec.*
 node_modules/**
@@ -15,3 +19,6 @@ node_modules/**
 !language-configuration.json
 !README.md
 !LICENSE
+!assets/icon.png
+!CHANGELOG.md
+!syntaxes/**

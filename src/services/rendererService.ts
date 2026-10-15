@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { isRendererFallback, RendererMode, RendererModeSetting } from './renderStatus';
 
 export interface RenderDiagnostic {
   message: string;
@@ -17,6 +18,10 @@ export interface RenderResult {
   diagnostics: RenderDiagnostic[];
   durationMs: number;
   errorMessage?: string;
+  /** The renderer that produced this result. */
+  rendererMode: RendererMode;
+  /** True when `rendererMode` is `auto` and no bundled worker was found, so `go run` was used instead. */
+  rendererFallback: boolean;
 }
 
 interface GoWorkerResponse {
@@ -31,30 +36,70 @@ interface FileSnapshot {
   dispose(): Promise<void>;
 }
 
+/**
+ * Rewrites diagnostic file paths that point at a temporary snapshot (written for unsaved documents)
+ * back to the document the snapshot was taken from, so DiagnosticService attaches them to the
+ * real template or context file. `snapshots` maps snapshot path -> original fsPath.
+ */
+export function remapSnapshotDiagnostics(
+  diagnostics: readonly RenderDiagnostic[],
+  snapshots: ReadonlyMap<string, string>
+): RenderDiagnostic[] {
+  const normalize = (value: string): string => {
+    const resolved = path.resolve(value);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  const lookup = new Map<string, string>();
+  for (const [snapshotPath, originalPath] of snapshots) {
+    if (snapshotPath !== originalPath) {
+      lookup.set(normalize(snapshotPath), originalPath);
+    }
+  }
+  if (lookup.size === 0) {
+    return [...diagnostics];
+  }
+
+  return diagnostics.map((diagnostic) => {
+    const original = diagnostic.file ? lookup.get(normalize(diagnostic.file)) : undefined;
+    return original ? { ...diagnostic, file: original } : diagnostic;
+  });
+}
+
 export class RendererService {
   public constructor(private readonly context: vscode.ExtensionContext, private readonly output: vscode.OutputChannel) {}
 
   public async render(template: vscode.Uri, contextFile?: vscode.Uri): Promise<RenderResult> {
-    const templateSnapshot = await this.createSnapshot(template);
-    const contextSnapshot = contextFile ? await this.createSnapshot(contextFile) : undefined;
+    let templateSnapshot: FileSnapshot | undefined;
+    let contextSnapshot: FileSnapshot | undefined;
 
     try {
-      const { command, args, mode } = await this.resolveRendererCommand(
+      // Snapshots are created inside the try so a failure creating the second one still removes the first.
+      templateSnapshot = await this.createSnapshot(template);
+      contextSnapshot = contextFile ? await this.createSnapshot(contextFile) : undefined;
+
+      const { command, args, mode, configuredMode, cwd, env } = await this.resolveRendererCommand(
         templateSnapshot.fsPath,
         contextSnapshot?.fsPath
       );
       this.output.appendLine(`[renderer] Executing (${mode}): ${command} ${args.join(' ')}`);
 
-      const response = await this.spawnProcess(command, args);
+      const response = await this.spawnProcess(command, args, cwd, env);
+
+      const snapshotPaths = new Map<string, string>([[templateSnapshot.fsPath, template.fsPath]]);
+      if (contextFile && contextSnapshot) {
+        snapshotPaths.set(contextSnapshot.fsPath, contextFile.fsPath);
+      }
 
       return {
         rendered: response.rendered ?? '',
-        diagnostics: response.diagnostics ?? [],
+        diagnostics: remapSnapshotDiagnostics(response.diagnostics ?? [], snapshotPaths),
         durationMs: response.durationMs ?? 0,
         errorMessage: response.error,
+        rendererMode: mode,
+        rendererFallback: isRendererFallback(configuredMode, mode),
       };
     } finally {
-      await templateSnapshot.dispose();
+      await templateSnapshot?.dispose();
       await contextSnapshot?.dispose();
     }
   }
@@ -62,10 +107,17 @@ export class RendererService {
   private async resolveRendererCommand(
     templatePath: string,
     contextPath?: string
-  ): Promise<{ command: string; args: string[]; mode: 'bundled' | 'system' }> {
+  ): Promise<{
+    command: string;
+    args: string[];
+    mode: RendererMode;
+    configuredMode: RendererModeSetting;
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+  }> {
     const config = vscode.workspace.getConfiguration('goTemplateStudio');
     const goBinary = config.get<string>('goBinary', 'go');
-    const rendererMode = config.get<'auto' | 'bundled' | 'system'>('rendererMode', 'auto');
+    const rendererMode = config.get<RendererModeSetting>('rendererMode', 'auto');
     const bundledBinary = await this.getBundledWorkerPath();
 
     const needsBundled = rendererMode === 'bundled';
@@ -83,14 +135,22 @@ export class RendererService {
     }
 
     if (preferBundled && bundledBinary) {
-      return { command: bundledBinary, args, mode: 'bundled' };
+      return { command: bundledBinary, args, mode: 'bundled', configuredMode: rendererMode };
     }
 
-    const workerUri = vscode.Uri.joinPath(this.context.extensionUri, 'go-worker', 'main.go');
+    // Run the worker as a package from its module directory so go.mod resolves the third-party
+    // decoders (YAML/TOML); `go run <file>` from another working directory cannot see the module's
+    // requirements. -mod=vendor builds from go-worker/vendor (no network or module cache needed, even
+    // if GOFLAGS says otherwise), and GOWORK=off keeps a go.work file named by the user's environment
+    // or found in a parent directory from taking over the build.
+    const workerDir = vscode.Uri.joinPath(this.context.extensionUri, 'go-worker');
     return {
       command: goBinary,
-      args: ['run', workerUri.fsPath, ...args],
+      args: ['run', '-mod=vendor', '.', ...args],
       mode: 'system',
+      configuredMode: rendererMode,
+      cwd: workerDir.fsPath,
+      env: { ...process.env, GOWORK: 'off' },
     };
   }
 
@@ -106,20 +166,28 @@ export class RendererService {
     }
 
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'go-template-preview-'));
+    const removeTempDirectory = async (): Promise<void> => {
+      try {
+        await fs.rm(tempDirectory, { recursive: true, force: true });
+      } catch (error) {
+        this.output.appendLine(
+          `[renderer] Failed to clean up temporary snapshot at ${tempDirectory}: ${(error as Error).message}`
+        );
+      }
+    };
+
+    // Keep the original file name: the worker picks html/template from the extension.
     const tempFile = path.join(tempDirectory, path.basename(uri.fsPath));
-    await fs.writeFile(tempFile, document.getText(), 'utf8');
+    try {
+      await fs.writeFile(tempFile, document.getText(), 'utf8');
+    } catch (error) {
+      await removeTempDirectory();
+      throw error;
+    }
 
     return {
       fsPath: tempFile,
-      dispose: async () => {
-        try {
-          await fs.rm(tempDirectory, { recursive: true, force: true });
-        } catch (error) {
-          this.output.appendLine(
-            `[renderer] Failed to clean up temporary snapshot at ${tempDirectory}: ${(error as Error).message}`
-          );
-        }
-      },
+      dispose: removeTempDirectory,
     };
   }
 
@@ -175,9 +243,14 @@ export class RendererService {
     }
   }
 
-  private spawnProcess(command: string, args: string[]): Promise<GoWorkerResponse> {
+  private spawnProcess(
+    command: string,
+    args: string[],
+    cwd?: string,
+    env?: NodeJS.ProcessEnv
+  ): Promise<GoWorkerResponse> {
     return new Promise((resolve, reject) => {
-      const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
 

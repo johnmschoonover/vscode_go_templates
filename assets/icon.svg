@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#0f172a"/>
+  <path d="M 32.50 33.50 C 28.00 33.50, 28.50 45.70, 28.50 54.85 C 28.50 60.95, 27.50 64.00, 22.50 64.00 C 27.50 64.00, 28.50 67.05, 28.50 73.15 C 28.50 82.30, 28.00 94.50, 32.50 94.50" fill="none" stroke="#00ADD8" stroke-width="7.0" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 52.50 33.50 C 48.00 33.50, 48.50 45.70, 48.50 54.85 C 48.50 60.95, 47.50 64.00, 42.50 64.00 C 47.50 64.00, 48.50 67.05, 48.50 73.15 C 48.50 82.30, 48.00 94.50, 52.50 94.50" fill="none" stroke="#00ADD8" stroke-width="7.0" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 77.50 33.50 C 82.00 33.50, 81.50 45.70, 81.50 54.85 C 81.50 60.95, 82.50 64.00, 87.50 64.00 C 82.50 64.00, 81.50 67.05, 81.50 73.15 C 81.50 82.30, 82.00 94.50, 77.50 94.50" fill="none" stroke="#7FDDF2" stroke-width="7.0" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 97.50 33.50 C 102.00 33.50, 101.50 45.70, 101.50 54.85 C 101.50 60.95, 102.50 64.00, 107.50 64.00 C 102.50 64.00, 101.50 67.05, 101.50 73.15 C 101.50 82.30, 102.00 94.50, 97.50 94.50" fill="none" stroke="#7FDDF2" stroke-width="7.0" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
