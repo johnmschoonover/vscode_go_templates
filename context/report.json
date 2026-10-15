@@ -1,0 +1,21 @@
+{
+  "Title": "Quarterly Team Report",
+  "Quarter": "Q3",
+  "Teams": {
+    "platform": {
+      "Lead": "Ada",
+      "Members": ["Ada", "Grace", "Linus"],
+      "Scores": { "reliability": 97.5, "velocity": 82 }
+    },
+    "web": {
+      "Lead": "",
+      "Members": ["Ken", "Rob"],
+      "Scores": { "reliability": 91, "velocity": 88.4 }
+    },
+    "data": {
+      "Members": [],
+      "Scores": {}
+    }
+  },
+  "Notes": null
+}

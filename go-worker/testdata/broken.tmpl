@@ -1,0 +1,7 @@
+{{/* Deliberately broken fixture for TestBrokenFixtureDiagnostics: the range action on line 4 is missing a closing brace. */}}
+<h1>{{ .Title }}</h1>
+<ul>
+{{ range .Items }
+  <li>{{ . }}</li>
+{{ end }}
+</ul>

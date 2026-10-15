@@ -29,6 +29,7 @@ First feature release after the `v1.0.x` packaging tags. Earlier tags shipped th
 - Marketplace packaging: extension icon, gallery banner, keywords, Sponsor link, and a **Buy me a coffee** button on the welcome notification.
 - Contributor docs: `CONTRIBUTING.md`, GitHub issue templates, and a pull request template.
 - Vitest unit-test harness for the extension services, plus CI checks for unit tests, `gofmt`, `go vet`, and VSIX packaging.
+- Sample templates and contexts: `deployment.yaml.tmpl` (YAML context, text output), `welcome.html.tmpl` (TOML context, `html/template` escaping), and `report.go.tmpl` (nested JSON, `define`/`template`, helpers), plus Go worker golden-file tests that render each sample and diagnostics tests for broken template, YAML, and TOML fixtures.
 
 ### Fixed
 - The editor title preview button now matches the contributed `go-templates` language id (plus `.tmpl`, `.tpl`, and `.gotmpl` extensions).

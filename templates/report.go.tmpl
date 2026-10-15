@@ -1,0 +1,44 @@
+{{/* Demonstrates nested data with with, range $k, $v, define/template, printf, and the default, join, upper, list, and dict helpers. */ -}}
+{{/* Partials must be defined in this file: cross-file partials (templates in other files) are not supported by the preview yet. */ -}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ .Title }}</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; color: #1f2937; }
+      table { border-collapse: collapse; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <h1>{{ .Title }} ({{ default "current quarter" .Quarter }})</h1>
+    {{- $metrics := list "reliability" "velocity" }}
+    {{- with .Teams }}
+    <p>{{ printf "%d teams, %d metrics each" (len .) (len $metrics) }}</p>
+    {{- range $name, $team := . }}
+    {{- template "team" (dict "Name" $name "Team" $team "Metrics" $metrics) }}
+    {{- end }}
+    {{- else }}
+    <p>No teams in this report.</p>
+    {{- end }}
+    {{- with .Notes }}
+    <p>Notes: {{ . }}</p>
+    {{- else }}
+    <p><em>No notes this quarter.</em></p>
+    {{- end }}
+  </body>
+</html>
+{{- define "team" }}
+    <section>
+      <h2>{{ upper .Name }}</h2>
+      <p>Lead: {{ default "unassigned" .Team.Lead }}</p>
+      <p>Members: {{ with .Team.Members }}{{ join ", " . }}{{ else }}none yet{{ end }}</p>
+      <table>
+        <tr><th>Metric</th><th>Score</th></tr>
+        {{- range .Metrics }}
+        <tr><td>{{ . }}</td><td>{{ with index $.Team.Scores . }}{{ printf "%.1f" . }}{{ else }}n/a{{ end }}</td></tr>
+        {{- end }}
+      </table>
+    </section>
+{{- end }}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	htmltmpl "html/template"
 	"os"
 	"path/filepath"
@@ -778,4 +780,173 @@ func TestParseContextTOMLLocalDatesAndTimes(t *testing.T) {
 			t.Fatalf("%s = %#v (%T), want %q", key, got, got, want)
 		}
 	}
+}
+
+// updateSamples refreshes the sample copies in testdata/ from templates/ and context/ and rewrites
+// their .golden files from the current render:
+//
+//	cd go-worker && go test -run TestSampleTemplatesRender -update
+var updateSamples = flag.Bool("update", false, "copy the samples from templates/ and context/ into testdata/ and rewrite the .golden files")
+
+// sampleCases are the user-facing sample pairs from templates/ and context/. Each pair is copied
+// into testdata/ (the test fails when a copy drifts from its source) and its render is compared
+// byte for byte with testdata/<name>.golden.
+var sampleCases = []struct {
+	name        string
+	template    string
+	context     string
+	isHTML      bool
+	contains    []string
+	notContains []string
+}{
+	{name: "deployment", template: "deployment.yaml.tmpl", context: "deployment.yaml", isHTML: false},
+	{
+		name:     "welcome",
+		template: "welcome.html.tmpl",
+		context:  "welcome.toml",
+		isHTML:   true,
+		// The TOML context's DisplayName holds a <script> tag that html/template must escape.
+		contains:    []string{"Gopher &lt;script&gt;alert(1)&lt;/script&gt;!"},
+		notContains: []string{"<script"},
+	},
+	{name: "report", template: "report.go.tmpl", context: "report.json", isHTML: true},
+}
+
+func TestSampleTemplatesRender(t *testing.T) {
+	for _, tc := range sampleCases {
+		t.Run(tc.name, func(t *testing.T) {
+			templatePath := filepath.Join("testdata", tc.template)
+			contextPath := filepath.Join("testdata", tc.context)
+			syncSampleCopy(t, filepath.Join("..", "templates", tc.template), templatePath)
+			syncSampleCopy(t, filepath.Join("..", "context", tc.context), contextPath)
+
+			templateBytes := readTestFile(t, templatePath)
+			if actual := isHTMLTemplate(templatePath, string(templateBytes)); actual != tc.isHTML {
+				t.Fatalf("isHTMLTemplate(%q) = %v, want %v", templatePath, actual, tc.isHTML)
+			}
+
+			resp := execute(templatePath, contextPath)
+			if resp.Error != "" || len(resp.Diagnostics) != 0 {
+				t.Fatalf("expected a clean render, got error %q and diagnostics %+v", resp.Error, resp.Diagnostics)
+			}
+
+			goldenPath := filepath.Join("testdata", tc.name+".golden")
+			if *updateSamples {
+				if err := os.WriteFile(goldenPath, []byte(resp.Rendered), 0o644); err != nil {
+					t.Fatalf("failed to write %s: %v", goldenPath, err)
+				}
+			}
+
+			want := readTestFile(t, goldenPath)
+			if resp.Rendered != string(want) {
+				line, got, expected := firstDifferentLine(resp.Rendered, string(want))
+				t.Fatalf("render differs from %s at line %d:\n got: %q\nwant: %q\n(run `go test -run TestSampleTemplatesRender -update` if the change is intended)", goldenPath, line, got, expected)
+			}
+
+			for _, fragment := range tc.contains {
+				if !strings.Contains(resp.Rendered, fragment) {
+					t.Fatalf("expected render to contain %q", fragment)
+				}
+			}
+			for _, fragment := range tc.notContains {
+				if strings.Contains(resp.Rendered, fragment) {
+					t.Fatalf("expected render not to contain %q", fragment)
+				}
+			}
+		})
+	}
+}
+
+// TestBrokenFixtureDiagnostics renders the deliberately broken fixtures in testdata/ (they never
+// live in templates/ or context/) and checks that each diagnostic points at the right file and position.
+func TestBrokenFixtureDiagnostics(t *testing.T) {
+	cases := []struct {
+		name          string
+		template      string
+		context       string
+		file          string
+		messagePrefix string
+		line          int
+		column        int
+	}{
+		{name: "template syntax error", template: "broken.tmpl", file: "broken.tmpl", messagePrefix: "template: broken.tmpl:4: ", line: 4},
+		{name: "yaml indentation error", template: "report.go.tmpl", context: "broken.yaml", file: "broken.yaml", messagePrefix: "failed to parse context YAML: ", line: 4},
+		{name: "toml missing value", template: "report.go.tmpl", context: "broken.toml", file: "broken.toml", messagePrefix: "failed to parse context TOML: ", line: 3, column: 7},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			contextPath := ""
+			if tc.context != "" {
+				contextPath = filepath.Join("testdata", tc.context)
+			}
+
+			resp := execute(filepath.Join("testdata", tc.template), contextPath)
+			if resp.Error == "" || resp.Rendered != "" {
+				t.Fatalf("expected a failed render, got error %q and output %q", resp.Error, resp.Rendered)
+			}
+			if len(resp.Diagnostics) != 1 {
+				t.Fatalf("expected one diagnostic, got %+v", resp.Diagnostics)
+			}
+
+			diag := resp.Diagnostics[0]
+			if want := filepath.Join("testdata", tc.file); diag.File != want {
+				t.Fatalf("diagnostic file = %q, want %q", diag.File, want)
+			}
+			if diag.Severity != "error" {
+				t.Fatalf("diagnostic severity = %q, want error", diag.Severity)
+			}
+			if !strings.HasPrefix(diag.Message, tc.messagePrefix) {
+				t.Fatalf("diagnostic message %q does not start with %q", diag.Message, tc.messagePrefix)
+			}
+			if diag.Line != tc.line || diag.Column != tc.column {
+				t.Fatalf("diagnostic position = %d:%d, want %d:%d (%s)", diag.Line, diag.Column, tc.line, tc.column, diag.Message)
+			}
+		})
+	}
+}
+
+// syncSampleCopy copies source over the testdata copy when -update is set, and otherwise fails
+// when the copy no longer matches its source.
+func syncSampleCopy(t *testing.T, source, copyPath string) {
+	t.Helper()
+	sourceBytes := readTestFile(t, source)
+	if *updateSamples {
+		if err := os.WriteFile(copyPath, sourceBytes, 0o644); err != nil {
+			t.Fatalf("failed to write %s: %v", copyPath, err)
+		}
+		return
+	}
+	if !bytes.Equal(sourceBytes, readTestFile(t, copyPath)) {
+		t.Fatalf("%s is out of date with %s (run `go test -run TestSampleTemplatesRender -update`)", copyPath, source)
+	}
+}
+
+func readTestFile(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	return content
+}
+
+// firstDifferentLine returns the 1-based number of the first line where got and want differ,
+// with both lines ("" past the end of either text).
+func firstDifferentLine(got, want string) (int, string, string) {
+	gotLines := strings.SplitAfter(got, "\n")
+	wantLines := strings.SplitAfter(want, "\n")
+	for i := 0; i < len(gotLines) || i < len(wantLines); i++ {
+		var g, w string
+		if i < len(gotLines) {
+			g = gotLines[i]
+		}
+		if i < len(wantLines) {
+			w = wantLines[i]
+		}
+		if g != w {
+			return i + 1, g, w
+		}
+	}
+	return 0, "", ""
 }

@@ -1,0 +1,4 @@
+# Deliberately broken fixture for TestBrokenFixtureDiagnostics: line 4 is indented under a scalar value.
+Title: Broken
+Items: first
+  nested: oops

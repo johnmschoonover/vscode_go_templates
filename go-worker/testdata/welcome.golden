@@ -1,0 +1,14 @@
+<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937;">
+  <h1 style="font-size: 22px;">Welcome to Go Template Studio, Gopher &lt;script&gt;alert(1)&lt;/script&gt;!</h1>
+  <p>Here are a few links to get you started:</p>
+  <ul>
+    <li><a href="https://example.com/quickstart">Read the quickstart</a></li>
+    <li><a href="https://example.com/samples">Browse the sample templates</a></li>
+  </ul>
+  <p>Questions? Write to <a href="mailto:support@example.com">support@example.com</a>.</p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb;" />
+  <footer style="font-size: 12px; color: #6b7280;">
+    <p>Example Co. &middot; 123 Template Lane, Gopher City</p>
+    <p><a href="https://example.com/unsubscribe">Unsubscribe</a></p>
+  </footer>
+</div>

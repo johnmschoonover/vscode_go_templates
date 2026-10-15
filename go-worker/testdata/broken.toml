@@ -1,0 +1,3 @@
+# Deliberately broken fixture for TestBrokenFixtureDiagnostics: the key on line 3 has no value.
+Title = "Broken"
+Name =

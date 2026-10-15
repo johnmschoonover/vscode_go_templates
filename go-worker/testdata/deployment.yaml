@@ -1,0 +1,18 @@
+# Context for templates/deployment.yaml.tmpl.
+Name: web
+Namespace: demo
+Replicas: 3
+Image:
+  Repository: nginx
+  Tag: "1.27"
+Port: 8080
+# Map keys render in sorted order when ranged over with $k, $v.
+Labels:
+  app: web
+  tier: frontend
+  team: platform
+Env:
+  - Name: LOG_LEVEL
+    Value: info
+  - Name: FEATURE_FLAGS
+    Value: beta,dark-mode

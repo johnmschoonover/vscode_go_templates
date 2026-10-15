@@ -8,6 +8,8 @@ vitest.config.ts
 tsconfig.test.json
 **/*.test.*
 **/*.spec.*
+# Worker test fixtures (sample copies, goldens, deliberately broken files) are not needed at runtime
+go-worker/testdata/**
 node_modules/**
 .*
 *.vsix

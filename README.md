@@ -52,8 +52,14 @@ With the default `auto` renderer mode, no Go installation is required when a bun
 - **Go Template Studio: Set Preview Layout** chooses where new previews open: **Beside** the editor (default) or **Below** it in a new editor group. The choice is remembered per workspace. Until you choose, `goTemplateStudio.preview.layout` applies. Previews that are already open stay where they are.
 
 ### Sample Assets
-- `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
-- The sample context provides a `Title` string and an `Items` array; the template renders the title as both the document heading and HTML title and lists the array entries.
+Open a template from `templates/` and pick the matching context from `context/` to try the preview. Each sample exercises a different part of the renderer and preview:
+- `templates/asdf.go.tmpl` + `context/asdf.json`: a minimal HTML page with a title and a list of items. Its leading `{{/* ... */}}` comment does not stop `<!DOCTYPE html>` from selecting the HTML view.
+- `templates/inline.go.tmpl` (no context): builds its data inline with the `list` and `map` helpers; choose **Render without context**.
+- `templates/deployment.yaml.tmpl` + `context/deployment.yaml`: a Kubernetes Deployment manifest from a YAML context, using `range` over a list and over a map (`$k, $v`) and `{{- -}}` whitespace control. It is a text template, so the HTML view falls back to Text.
+- `templates/welcome.html.tmpl` + `context/welcome.toml`: an HTML email from a TOML context. The inner `.html` extension selects `html/template` without a doctype, so the context's `<script>alert(1)</script>` display name is escaped and shows as text.
+- `templates/report.go.tmpl` + `context/report.json`: a team report from nested JSON using `with`, `range $k, $v`, a `define`d block called with `template`, `printf`, and the `default`, `join`, `upper`, `list`, and `dict` helpers. Blocks must be defined in the same file; the preview does not support cross-file partials yet.
+
+The Go worker tests render copies of these samples (in `go-worker/testdata/`) and compare the output with golden files; see the [Testing & QA Plan](testing_plan.md).
 
 ## Settings
 - `goTemplateStudio.goBinary`: Path to the Go binary used for rendering templates (default `go`). Override it when a custom toolchain is required.

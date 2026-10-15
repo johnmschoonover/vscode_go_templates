@@ -86,7 +86,7 @@
 - Use `vsce` for packaging; configure semantic versioning (the manifest version must match the release tag; `1.1.0` is the first release that follows this).
 - Minimize extension bundle size by compiling TypeScript to ES2019 and tree-shaking dependencies.
 - Publish under an open-source license (e.g., MIT) with marketplace listing that clearly states the extension is free.
-- Provide sample templates and contexts in the repository `/samples` directory for discoverability.
+- Provide sample templates in the repository `templates/` directory, with their context files in `context/`, for discoverability (`asdf`, `inline`, `deployment`, `welcome`, and `report`; see the README "Sample Assets" section). Copies of the sample pairs live in `go-worker/testdata/`, where the worker tests compare their renders with golden files.
 
 ## 9. Open Technical Questions
 - Should the fallback renderer ship in MVP or remain an optional download to minimize bundle size?
