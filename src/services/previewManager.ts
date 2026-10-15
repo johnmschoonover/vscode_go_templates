@@ -28,7 +28,10 @@ export function isViewMode(value: unknown): value is ViewMode {
 const TEMPLATE_EXTENSIONS = new Set(['.tmpl', '.tpl', '.gotmpl']);
 const HTML_EXTENSIONS = new Set(['.html', '.htm']);
 /** Content starting with an HTML doctype or <html> element (ASCII whitespace only, as in Go's `\s`). */
-const HTML_DOCUMENT_PATTERN = /^[\t\n\f\r ]*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])/i;
+// Leading whitespace and Go template comments ({{/* ... */}}, with optional trim markers) are
+// skipped so a documented template such as templates/asdf.go.tmpl still counts as HTML.
+const HTML_DOCUMENT_PATTERN =
+  /^(?:[\t\n\f\r ]|\{\{-?[\t\n\f\r ]*\/\*[\s\S]*?\*\/[\t\n\f\r ]*-?\}\})*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])/i;
 
 /**
  * Whether a template renders HTML, which enables the preview's HTML view. Mirrors `isHTMLTemplate` in

@@ -314,7 +314,11 @@ describe('PreviewManager', () => {
       ['/ws/templates/page.tpl', '<HTML lang="en">', true],
       ['/ws/templates/page.tpl', '<html>', true],
       ['/ws/templates/partial.tmpl', '<div>{{.}}</div>', false],
-      ['/ws/templates/page.tmpl', '{{/* c */}}<!DOCTYPE html>', false],
+      ['/ws/templates/page.tmpl', '{{/* c */}}<!DOCTYPE html>', true],
+      ['/ws/templates/asdf.go.tmpl', '{{/* Example Go template for the preview. */}}\n<!DOCTYPE html>\n<html lang="en">', true],
+      ['/ws/templates/page.tmpl', '{{- /* multi\nline */ -}}\n  {{/* second */}}<html>', true],
+      ['/ws/templates/page.tmpl', '{{if .Show}}<!DOCTYPE html>{{end}}', false],
+      ['/ws/templates/page.tmpl', '{{/* unterminated <!DOCTYPE html>', false],
       ['/ws/templates/page.tmpl', '<htmlish>', false],
       ['/ws/templates/page.tmpl', undefined, false],
     ])('isHtmlTemplate(%j, %j) is %s', (fsPath, content, expected) => {

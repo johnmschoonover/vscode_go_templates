@@ -361,7 +361,9 @@ var templateExtensions = map[string]bool{".tmpl": true, ".tpl": true, ".gotmpl":
 
 // htmlDocumentPattern matches content that starts with an HTML doctype or
 // <html> element (case-insensitive, after optional ASCII whitespace).
-var htmlDocumentPattern = regexp.MustCompile(`(?i)^[\t\n\f\r ]*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])`)
+// Leading whitespace and Go template comments ({{/* ... */}}, with optional trim
+// markers) are skipped so a documented template still counts as HTML.
+var htmlDocumentPattern = regexp.MustCompile(`(?is)^(?:[\t\n\f\r ]|\{\{-?[\t\n\f\r ]*/\*.*?\*/[\t\n\f\r ]*-?\}\})*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])`)
 
 // isHTMLTemplate reports whether a template renders HTML and should therefore
 // use html/template (contextual escaping). The rule must stay in sync with

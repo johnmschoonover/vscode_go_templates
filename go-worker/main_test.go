@@ -225,7 +225,11 @@ func TestIsHTMLTemplate(t *testing.T) {
 		{name: "html element sniffed", path: "page.tpl", content: "<HTML lang=\"en\">", expected: true},
 		{name: "bare html element", path: "page.tpl", content: "<html>", expected: true},
 		{name: "fragment is not sniffed", path: "partial.tmpl", content: "<div>{{.}}</div>", expected: false},
-		{name: "doctype after text", path: "page.tmpl", content: "{{/* c */}}<!DOCTYPE html>", expected: false},
+		{name: "doctype after comment", path: "page.tmpl", content: "{{/* c */}}<!DOCTYPE html>", expected: true},
+		{name: "sample template with leading comment line", path: "asdf.go.tmpl", content: "{{/* Example Go template for the preview. */}}\n<!DOCTYPE html>\n<html lang=\"en\">", expected: true},
+		{name: "trimmed multi-line comments", path: "page.tmpl", content: "{{- /* multi\nline */ -}}\n  {{/* second */}}<html>", expected: true},
+		{name: "doctype after non-comment action", path: "page.tmpl", content: "{{if .Show}}<!DOCTYPE html>{{end}}", expected: false},
+		{name: "unterminated comment", path: "page.tmpl", content: "{{/* unterminated <!DOCTYPE html>", expected: false},
 		{name: "html prefix of another element", path: "page.tmpl", content: "<htmlish>", expected: false},
 	}
 
