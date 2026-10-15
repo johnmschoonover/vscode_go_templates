@@ -129,8 +129,11 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "typecheck": "tsc -p ./ --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint src --ext ts",
-    "test": "npm run test:templates",
+    "test": "npm run test:unit && npm run test:templates",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "test:templates": "cd go-worker && go test ./...",
     "update:grammar": "node ./scripts/update-go-template-grammar.mjs",
     "verify:grammar": "node ./scripts/check-go-template-grammar.mjs"
@@ -141,7 +144,8 @@
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.85.0",
     "eslint": "^8.56.0",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "vitest": "^2.1.9"
   },
   "dependencies": {}
 }

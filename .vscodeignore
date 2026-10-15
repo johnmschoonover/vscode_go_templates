@@ -2,6 +2,9 @@
 .github/**
 .vscode/**
 src/**
+test/**
+vitest.config.ts
+tsconfig.test.json
 **/*.test.*
 **/*.spec.*
 node_modules/**

@@ -87,7 +87,7 @@ This repository began as planning documents plus initial scaffolding, so the PRD
 2. Compile the extension using `npm run compile`.
 3. Launch the extension in VS Code by pressing `F5` from this workspace (this uses the included **Run Extension** launch configuration).
    - When you want automatic rebuilds, start `npm run watch` and choose the **Run Extension (Watch)** configuration from the debug dropdown.
-4. Run `npm run lint`, `npm run typecheck`, and `npm run test` to keep changes healthy. The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
+4. Run `npm run lint`, `npm run typecheck`, and `npm run test` to keep changes healthy. `npm run test` runs the TypeScript unit tests (`npm run test:unit`, powered by vitest; use `npm run test:unit:watch` while iterating and `npm run typecheck:test` to type-check them) followed by the Go worker tests (`npm run test:templates`). The optional `pre-commit` hook configuration will run these checks automatically before each commit if installed locally.
 
 ### Updating the TextMate Grammar
 - Run `npm run update:grammar` to pull the latest grammar and license snapshot from `jinliming2/vscode-go-template`.

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "vscode": ["test/__mocks__/vscode.ts"]
+    }
+  },
+  "include": ["test", "vitest.config.ts"]
+}
