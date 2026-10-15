@@ -39,13 +39,13 @@ export class RendererService {
     const contextSnapshot = contextFile ? await this.createSnapshot(contextFile) : undefined;
 
     try {
-      const { command, args, mode } = await this.resolveRendererCommand(
+      const { command, args, mode, cwd } = await this.resolveRendererCommand(
         templateSnapshot.fsPath,
         contextSnapshot?.fsPath
       );
       this.output.appendLine(`[renderer] Executing (${mode}): ${command} ${args.join(' ')}`);
 
-      const response = await this.spawnProcess(command, args);
+      const response = await this.spawnProcess(command, args, cwd);
 
       return {
         rendered: response.rendered ?? '',
@@ -62,7 +62,7 @@ export class RendererService {
   private async resolveRendererCommand(
     templatePath: string,
     contextPath?: string
-  ): Promise<{ command: string; args: string[]; mode: 'bundled' | 'system' }> {
+  ): Promise<{ command: string; args: string[]; mode: 'bundled' | 'system'; cwd?: string }> {
     const config = vscode.workspace.getConfiguration('goTemplateStudio');
     const goBinary = config.get<string>('goBinary', 'go');
     const rendererMode = config.get<'auto' | 'bundled' | 'system'>('rendererMode', 'auto');
@@ -86,11 +86,15 @@ export class RendererService {
       return { command: bundledBinary, args, mode: 'bundled' };
     }
 
-    const workerUri = vscode.Uri.joinPath(this.context.extensionUri, 'go-worker', 'main.go');
+    // Run the worker as a package from its module directory so go.mod/go.sum
+    // resolve third-party decoders (YAML/TOML). `go run <file>` from another
+    // working directory cannot see the module's requirements.
+    const workerDir = vscode.Uri.joinPath(this.context.extensionUri, 'go-worker');
     return {
       command: goBinary,
-      args: ['run', workerUri.fsPath, ...args],
+      args: ['run', '.', ...args],
       mode: 'system',
+      cwd: workerDir.fsPath,
     };
   }
 
@@ -175,9 +179,9 @@ export class RendererService {
     }
   }
 
-  private spawnProcess(command: string, args: string[]): Promise<GoWorkerResponse> {
+  private spawnProcess(command: string, args: string[], cwd?: string): Promise<GoWorkerResponse> {
     return new Promise((resolve, reject) => {
-      const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
 

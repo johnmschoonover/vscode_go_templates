@@ -41,9 +41,12 @@
   {
     "path": "context/welcome_user.json",
     "label": "Welcome User",
+    "format": "json",
     "lastUsed": "2024-04-18T10:30:00Z"
   }
   ```
+  - `format` is one of `json`, `yaml` (`.yaml`/`.yml`), or `toml`, derived from the file extension (`ContextDescriptor.format` in `src/context/contextManager.ts`). The Go worker picks its decoder from the same extensions and normalizes YAML/TOML into the map and slice shapes `encoding/json` produces. `lastUsed` is not implemented yet.
+  - YAML/TOML parse failures return a context diagnostic with `file` set to the context path and `line`/`column` when the decoder reports them. yaml.v3 gives a line only; TOML gives line and column.
 - **Renderer Request:**
   ```json
   {

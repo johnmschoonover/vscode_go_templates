@@ -16,6 +16,9 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 type diagnostic struct {
@@ -72,6 +75,11 @@ func execute(templatePath, contextPath string) response {
 		if strings.TrimSpace(contextPath) != "" {
 			diag.File = contextPath
 		}
+		var parseErr *contextParseError
+		if errors.As(err, &parseErr) {
+			diag.Line = parseErr.line
+			diag.Column = parseErr.column
+		}
 		return response{
 			Diagnostics: []diagnostic{diag},
 			Error:       err.Error(),
@@ -120,6 +128,40 @@ func extractTemplatePosition(diag *diagnostic) {
 	}
 }
 
+// contextFormat identifies the serialization used by a context data file.
+type contextFormat string
+
+const (
+	contextFormatJSON contextFormat = "JSON"
+	contextFormatYAML contextFormat = "YAML"
+	contextFormatTOML contextFormat = "TOML"
+)
+
+// contextFormatForPath selects a decoder based on the file extension. Unknown
+// extensions fall back to JSON to preserve the original worker behavior.
+func contextFormatForPath(path string) contextFormat {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".yaml", ".yml":
+		return contextFormatYAML
+	case ".toml":
+		return contextFormatTOML
+	default:
+		return contextFormatJSON
+	}
+}
+
+// contextParseError reports a context decoding failure along with the 1-based
+// line and column when the underlying decoder exposes them (0 when unknown).
+type contextParseError struct {
+	message string
+	line    int
+	column  int
+}
+
+func (e *contextParseError) Error() string {
+	return e.message
+}
+
 func loadContext(contextPath string) (interface{}, error) {
 	if strings.TrimSpace(contextPath) == "" {
 		return map[string]any{}, nil
@@ -130,21 +172,100 @@ func loadContext(contextPath string) (interface{}, error) {
 		return nil, err
 	}
 
-	return parseContext(contextBytes)
+	return parseContext(contextBytes, contextFormatForPath(contextPath))
 }
 
-func parseContext(content []byte) (interface{}, error) {
+func parseContext(content []byte, format contextFormat) (interface{}, error) {
 	trimmed := strings.TrimSpace(string(content))
 	if trimmed == "" {
 		return map[string]any{}, nil
 	}
 
+	switch format {
+	case contextFormatYAML:
+		return parseYAMLContext(content)
+	case contextFormatTOML:
+		return parseTOMLContext(content)
+	default:
+		var data interface{}
+		if err := json.Unmarshal([]byte(trimmed), &data); err != nil {
+			return nil, errors.New("failed to parse context JSON")
+		}
+		return data, nil
+	}
+}
+
+// yamlLinePattern matches the position prefix yaml.v3 embeds in its error
+// messages, e.g. "yaml: line 3: mapping values are not allowed".
+var yamlLinePattern = regexp.MustCompile(`line (\d+)(?:, column (\d+))?`)
+
+func parseYAMLContext(content []byte) (interface{}, error) {
+	// Decode the untrimmed content so reported line numbers match the file.
 	var data interface{}
-	if err := json.Unmarshal([]byte(trimmed), &data); err != nil {
-		return nil, errors.New("failed to parse context JSON")
+	if err := yaml.Unmarshal(content, &data); err != nil {
+		parseErr := &contextParseError{message: "failed to parse context YAML: " + err.Error()}
+		if matches := yamlLinePattern.FindStringSubmatch(err.Error()); matches != nil {
+			parseErr.line, _ = strconv.Atoi(matches[1])
+			if matches[2] != "" {
+				parseErr.column, _ = strconv.Atoi(matches[2])
+			}
+		}
+		return nil, parseErr
 	}
 
-	return data, nil
+	if data == nil {
+		// A document containing only comments decodes to nil.
+		return map[string]any{}, nil
+	}
+
+	return normalizeContextValue(data), nil
+}
+
+func parseTOMLContext(content []byte) (interface{}, error) {
+	data := map[string]interface{}{}
+	if _, err := toml.Decode(string(content), &data); err != nil {
+		parseErr := &contextParseError{message: "failed to parse context TOML: " + err.Error()}
+		var tomlErr toml.ParseError
+		if errors.As(err, &tomlErr) {
+			parseErr.line = tomlErr.Position.Line
+			parseErr.column = tomlErr.Position.Col
+		}
+		return nil, parseErr
+	}
+
+	return normalizeContextValue(data), nil
+}
+
+// normalizeContextValue converts decoder-specific container types into the
+// shapes encoding/json produces (map[string]interface{} and []interface{}) so
+// templates behave identically regardless of the context file format.
+func normalizeContextValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, item := range typed {
+			typed[key] = normalizeContextValue(item)
+		}
+		return typed
+	case map[interface{}]interface{}:
+		converted := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			converted[fmt.Sprint(key)] = normalizeContextValue(item)
+		}
+		return converted
+	case []interface{}:
+		for i, item := range typed {
+			typed[i] = normalizeContextValue(item)
+		}
+		return typed
+	case []map[string]interface{}:
+		converted := make([]interface{}, len(typed))
+		for i, item := range typed {
+			converted[i] = normalizeContextValue(item)
+		}
+		return converted
+	default:
+		return value
+	}
 }
 
 func renderTemplate(path, content string, data interface{}) (string, error) {

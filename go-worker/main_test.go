@@ -147,7 +147,7 @@ func TestExecuteReportsContextErrors(t *testing.T) {
 
 func TestParseContext(t *testing.T) {
 	t.Run("empty content", func(t *testing.T) {
-		data, err := parseContext([]byte("   \n"))
+		data, err := parseContext([]byte("   \n"), contextFormatJSON)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -158,7 +158,7 @@ func TestParseContext(t *testing.T) {
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
-		_, err := parseContext([]byte("not valid"))
+		_, err := parseContext([]byte("not valid"), contextFormatJSON)
 		if err == nil {
 			t.Fatal("expected json parsing error")
 		}
@@ -169,7 +169,7 @@ func TestParseContext(t *testing.T) {
 	})
 
 	t.Run("valid json", func(t *testing.T) {
-		data, err := parseContext([]byte(`{"name":"Gopher"}`))
+		data, err := parseContext([]byte(`{"name":"Gopher"}`), contextFormatJSON)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -366,5 +366,271 @@ func TestFuncMapsExposeHelpers(t *testing.T) {
 		if _, ok := htmlFuncs[key]; !ok {
 			t.Fatalf("html func map missing %s helper", key)
 		}
+	}
+}
+
+func TestContextFormatForPath(t *testing.T) {
+	cases := []struct {
+		path     string
+		expected contextFormat
+	}{
+		{"context/data.json", contextFormatJSON},
+		{"context/data.yaml", contextFormatYAML},
+		{"context/data.yml", contextFormatYAML},
+		{"context/DATA.YML", contextFormatYAML},
+		{"context/data.toml", contextFormatTOML},
+		{"context/data.Toml", contextFormatTOML},
+		{"context/data", contextFormatJSON},
+		{"context/data.txt", contextFormatJSON},
+	}
+
+	for _, tc := range cases {
+		if actual := contextFormatForPath(tc.path); actual != tc.expected {
+			t.Errorf("contextFormatForPath(%q) = %s, want %s", tc.path, actual, tc.expected)
+		}
+	}
+}
+
+func TestParseContextStructuredFormats(t *testing.T) {
+	cases := []struct {
+		name     string
+		format   contextFormat
+		content  string
+		template string
+		expected string
+	}{
+		{
+			name:     "yaml top-level values",
+			format:   contextFormatYAML,
+			content:  "Title: Hello\nItems:\n  - first\n  - second\n",
+			template: "{{.Title}}:{{range .Items}} {{.}}{{end}}",
+			expected: "Hello: first second",
+		},
+		{
+			name:     "yaml nested maps",
+			format:   contextFormatYAML,
+			content:  "# leading comment\nSite:\n  Owner:\n    Name: Gopher\n  Tags: [go, templates]\n",
+			template: "{{.Site.Owner.Name}} {{index .Site.Tags 1}}",
+			expected: "Gopher templates",
+		},
+		{
+			name:     "yaml non-string keys are stringified",
+			format:   contextFormatYAML,
+			content:  "Codes:\n  200: ok\n  404:\n    Text: missing\n",
+			template: `{{index .Codes "200"}} {{(index .Codes "404").Text}}`,
+			expected: "ok missing",
+		},
+		{
+			name:     "yaml comments only",
+			format:   contextFormatYAML,
+			content:  "# nothing here yet\n",
+			template: "{{len .}}",
+			expected: "0",
+		},
+		{
+			name:     "toml top-level values",
+			format:   contextFormatTOML,
+			content:  "Title = \"Hello\"\nItems = [\"first\", \"second\"]\n",
+			template: "{{.Title}}:{{range .Items}} {{.}}{{end}}",
+			expected: "Hello: first second",
+		},
+		{
+			name:     "toml nested tables",
+			format:   contextFormatTOML,
+			content:  "[Site.Owner]\nName = \"Gopher\"\nAge = 14\n",
+			template: "{{.Site.Owner.Name}} {{.Site.Owner.Age}}",
+			expected: "Gopher 14",
+		},
+		{
+			name:     "toml array of tables",
+			format:   contextFormatTOML,
+			content:  "[[Items]]\nName = \"a\"\n\n[[Items]]\nName = \"b\"\n",
+			template: "{{range .Items}}{{.Name}}{{end}} {{len .Items}}",
+			expected: "ab 2",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := parseContext([]byte(tc.content), tc.format)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if _, ok := data.(map[string]interface{}); !ok {
+				t.Fatalf("expected map[string]interface{} root, got %T", data)
+			}
+
+			rendered, err := renderTemplate("context.tmpl", tc.template, data)
+			if err != nil {
+				t.Fatalf("unexpected render error: %v", err)
+			}
+
+			if rendered != tc.expected {
+				t.Fatalf("rendered %q, want %q", rendered, tc.expected)
+			}
+		})
+	}
+}
+
+func TestParseContextStructuredErrors(t *testing.T) {
+	cases := []struct {
+		name           string
+		format         contextFormat
+		content        string
+		expectedPrefix string
+		expectedLine   int
+		expectedColumn int
+	}{
+		{
+			name:           "yaml tab indentation",
+			format:         contextFormatYAML,
+			content:        "Title: Hello\nItems:\n\t- first\n",
+			expectedPrefix: "failed to parse context YAML: ",
+			expectedLine:   3,
+		},
+		{
+			name:           "yaml mapping inside scalar",
+			format:         contextFormatYAML,
+			content:        "Title: Hello\nItems: first\n  nested: oops\n",
+			expectedPrefix: "failed to parse context YAML: ",
+			expectedLine:   3,
+		},
+		{
+			name:           "toml missing value",
+			format:         contextFormatTOML,
+			content:        "Title = \"Hello\"\n\n[Site]\nName = \n",
+			expectedPrefix: "failed to parse context TOML: ",
+			expectedLine:   4,
+			expectedColumn: 8,
+		},
+		{
+			name:           "toml duplicate key",
+			format:         contextFormatTOML,
+			content:        "Title = \"Hello\"\nTitle = \"Again\"\n",
+			expectedPrefix: "failed to parse context TOML: ",
+			expectedLine:   2,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseContext([]byte(tc.content), tc.format)
+			if err == nil {
+				t.Fatal("expected parse error")
+			}
+
+			parseErr, ok := err.(*contextParseError)
+			if !ok {
+				t.Fatalf("expected *contextParseError, got %T", err)
+			}
+
+			if !strings.HasPrefix(parseErr.Error(), tc.expectedPrefix) {
+				t.Fatalf("expected message prefix %q, got %q", tc.expectedPrefix, parseErr.Error())
+			}
+
+			if parseErr.line != tc.expectedLine {
+				t.Fatalf("expected line %d, got %d (%s)", tc.expectedLine, parseErr.line, parseErr.Error())
+			}
+
+			if tc.expectedColumn != 0 && parseErr.column != tc.expectedColumn {
+				t.Fatalf("expected column %d, got %d (%s)", tc.expectedColumn, parseErr.column, parseErr.Error())
+			}
+		})
+	}
+}
+
+func TestExecuteWithStructuredContextFiles(t *testing.T) {
+	cases := []struct {
+		name           string
+		fileName       string
+		content        string
+		expected       string
+		expectError    bool
+		expectedLine   int
+		expectedColumn int
+	}{
+		{
+			name:     "yaml file",
+			fileName: "context.yaml",
+			content:  "Site:\n  Name: Studio\n",
+			expected: "Hello Studio",
+		},
+		{
+			name:     "yml file",
+			fileName: "context.yml",
+			content:  "Site: {Name: Studio}\n",
+			expected: "Hello Studio",
+		},
+		{
+			name:     "toml file",
+			fileName: "context.toml",
+			content:  "[Site]\nName = \"Studio\"\n",
+			expected: "Hello Studio",
+		},
+		{
+			name:         "yaml parse error",
+			fileName:     "broken.yaml",
+			content:      "Site:\n  Name: Studio\n  Extra: one\n    nested: oops\n",
+			expectError:  true,
+			expectedLine: 4,
+		},
+		{
+			name:           "toml parse error",
+			fileName:       "broken.toml",
+			content:        "[Site]\nName = \n",
+			expectError:    true,
+			expectedLine:   2,
+			expectedColumn: 8,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			templatePath := filepath.Join(dir, "greeting.tmpl")
+			if err := os.WriteFile(templatePath, []byte("Hello {{.Site.Name}}"), 0o600); err != nil {
+				t.Fatalf("failed to write template file: %v", err)
+			}
+
+			contextPath := filepath.Join(dir, tc.fileName)
+			if err := os.WriteFile(contextPath, []byte(tc.content), 0o600); err != nil {
+				t.Fatalf("failed to write context file: %v", err)
+			}
+
+			resp := execute(templatePath, contextPath)
+
+			if !tc.expectError {
+				if resp.Error != "" {
+					t.Fatalf("expected successful render, got error: %s", resp.Error)
+				}
+				if resp.Rendered != tc.expected {
+					t.Fatalf("rendered %q, want %q", resp.Rendered, tc.expected)
+				}
+				return
+			}
+
+			if resp.Error == "" {
+				t.Fatal("expected an error for malformed context")
+			}
+
+			if len(resp.Diagnostics) != 1 {
+				t.Fatalf("expected one diagnostic, got %d", len(resp.Diagnostics))
+			}
+
+			diag := resp.Diagnostics[0]
+			if diag.File != contextPath {
+				t.Fatalf("expected diagnostic file %q, got %q", contextPath, diag.File)
+			}
+			if diag.Severity != "error" {
+				t.Fatalf("expected error severity, got %q", diag.Severity)
+			}
+			if diag.Line != tc.expectedLine {
+				t.Fatalf("expected line %d, got %d (%s)", tc.expectedLine, diag.Line, diag.Message)
+			}
+			if diag.Column != tc.expectedColumn {
+				t.Fatalf("expected column %d, got %d (%s)", tc.expectedColumn, diag.Column, diag.Message)
+			}
+		})
 	}
 }

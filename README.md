@@ -12,7 +12,7 @@ Preview, debug, and highlight Go `text/template` and `html/template` files in VS
 - **Stable preview state:** Scroll position, text selection, and diagnostics in the preview persist between renders, keeping your place as you iterate on a template or tweak its context data.
 - **Diagnostics:** Errors surface both as VS Code squiggles and inside the preview sidebar, with clickable entries that focus the offending template or context location. The status footer reports render duration or fallback status, and the preview keeps the last successful output visible when errors occur.
 - **Safe HTML rendering:** HTML templates render inside an isolated iframe while other outputs show inline code, and errors surface as a banner within the preview instead of resetting the webview.
-- **Context explorer:** A tree view lists context files from configured directories and allows opening files or selecting them for rendering.
+- **Context explorer:** A tree view lists JSON, YAML, and TOML context files from configured directories and lets you create, duplicate, delete, open, or select them for rendering (see [Context Files](#context-files)).
 - **Syntax highlighting:** A **Go Templates** language mode is available from VS Code's language selector for files such as `.tmpl`, `.gotmpl`, and `.tpl` templates, complete with TextMate-based syntax highlighting powered by the vendored grammar from [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template).
 - **Template helpers:** Built-in helpers such as `list`, `dict`, `default`, `join`, and common string filters are pre-registered for every preview (see [Template Helpers](#template-helpers)).
 - **Bundled renderer:** Tagged releases ship prebuilt renderer binaries so end users do not need Go installed (see [Renderer Binaries](#renderer-binaries)).
@@ -26,6 +26,13 @@ Preview, debug, and highlight Go `text/template` and `html/template` files in VS
 5. Edit the template or its context file and watch the preview update as you type.
 
 With the default `auto` renderer mode, no Go installation is required when a bundled renderer is available for your platform. See the [Quickstart Guide](docs/quickstart.md) for more detail.
+
+### Context Files
+- **Formats:** `.json`, `.yaml`/`.yml`, and `.toml` files inside the configured `contextDirs` (default `context/`) are discovered automatically. Templates see the same shapes regardless of format, so `{{ .Site.Owner.Name }}` works against nested YAML maps or TOML tables just as it does for JSON. Each tree item shows its format next to its path.
+- **Create:** the **+** button in the **Go Template Contexts** view title (or **Go Template Studio: Create Context File**) asks for a file name (`.json` is added when you omit the extension), picks a context directory when several are configured, offers to create `context/` if it is missing, and writes a starter document with `Title` and `Items`. If a template editor was active, you are offered to use the new file as its context.
+- **Duplicate / Delete / Open:** right-click a context in the view. Duplicates keep the source format and land beside the original; deletes ask for confirmation and move the file to the trash. From the command palette these commands show a quick pick instead.
+- **Empty state:** when no context files exist, the view shows a **Create a sample context** button.
+- **Parse errors:** YAML and TOML syntax errors are reported on the context file at the line (and, for TOML, column) the parser reports. JSON errors are reported on the file without a position.
 
 ### Sample Assets
 - `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
@@ -43,7 +50,7 @@ With the default `auto` renderer mode, no Go installation is required when a bun
 
 ### Renderer Binaries
 - Tagged releases include prebuilt `go-worker` binaries under `assets/bin/<platform>-<arch>/` so end users do not need Go installed. Supported targets today are `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`.
-- Development builds (for example, running from source) will automatically fall back to `go run` when the bundled binary is absent, preserving the contributor workflow.
+- Development builds (for example, running from source) will automatically fall back to `go run` when the bundled binary is absent, preserving the contributor workflow. The fallback runs `go run .` inside `go-worker/`, so the first render downloads the worker's YAML/TOML modules (needs network access or a warm Go module cache).
 - Contributors can force a specific mode via `rendererMode`, or point `goBinary` at a custom toolchain when testing system-mode changes.
 
 ## Template Helpers

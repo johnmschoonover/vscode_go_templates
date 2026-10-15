@@ -82,11 +82,28 @@
       {
         "command": "goTemplateStudio.refreshContexts",
         "title": "Go Template Studio: Refresh Contexts",
-        "category": "Go Template Studio"
+        "category": "Go Template Studio",
+        "icon": "$(refresh)"
       },
       {
         "command": "goTemplateStudio.openContextFile",
         "title": "Go Template Studio: Open Context File",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.createContext",
+        "title": "Go Template Studio: Create Context File",
+        "category": "Go Template Studio",
+        "icon": "$(add)"
+      },
+      {
+        "command": "goTemplateStudio.duplicateContext",
+        "title": "Go Template Studio: Duplicate Context File",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.deleteContext",
+        "title": "Go Template Studio: Delete Context File",
         "category": "Go Template Studio"
       }
     ],
@@ -96,6 +113,35 @@
           "command": "goTemplateStudio.preview",
           "group": "navigation@99",
           "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "goTemplateStudio.createContext",
+          "when": "view == goTemplateStudio.contextExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "goTemplateStudio.refreshContexts",
+          "when": "view == goTemplateStudio.contextExplorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "goTemplateStudio.openContextFile",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "navigation@1"
+        },
+        {
+          "command": "goTemplateStudio.duplicateContext",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "goTemplateStudio.deleteContext",
+          "when": "view == goTemplateStudio.contextExplorer && viewItem == context-item",
+          "group": "7_modification@2"
         }
       ]
     },
@@ -107,6 +153,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "goTemplateStudio.contextExplorer",
+        "contents": "No context files found. Context files supply the data your templates render with, in JSON, YAML, or TOML.\n[Create a sample context](command:goTemplateStudio.createContext)\nContext files are discovered in the contextDirs listed in .vscode/goTemplateStudio.json (default: context/).",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "view": "goTemplateStudio.contextExplorer",
+        "contents": "Open a folder to discover and create context files.\n[Open Folder](command:vscode.openFolder)",
+        "when": "workspaceFolderCount == 0"
+      }
+    ],
     "configuration": {
       "title": "Go Template Studio",
       "properties": {

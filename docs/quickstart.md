@@ -28,4 +28,33 @@ Common transformations are also ready to use:
 
 The helpers work in both text and HTML templates. Pair them with the **Render without context** command to iterate rapidly when you only need inline data.
 
+## Reference Data
+
+Context files hold the data your template renders with. Put them in a `context/` folder (or any directory listed in `contextDirs` in `.vscode/goTemplateStudio.json`) as `.json`, `.yaml`/`.yml`, or `.toml`. They appear in the **Go Template Contexts** view in the Explorer.
+
+For example, `context/welcome.yaml`:
+
+```yaml
+Title: Welcome aboard
+Site:
+  Owner:
+    Name: Gopher
+Items:
+  - Read the quickstart
+  - Preview a template
+```
+
+A template can then read nested values the same way it would from JSON:
+
+```gotemplate
+<h1>{{ .Title }}</h1>
+<p>Maintained by {{ .Site.Owner.Name }}</p>
+<ul>{{ range .Items }}<li>{{ . }}</li>{{ end }}</ul>
+```
+
+- Click **+** in the view title (or run **Go Template Studio: Create Context File**) to create a starter file. Type a name ending in `.yaml`, `.yml`, or `.toml` to pick that format, or leave off the extension to get JSON.
+- Right-click a context to open, duplicate, or delete it. Deleted files go to the trash.
+- Run **Go Template Studio: Select Context** with a template open to choose which context the preview uses.
+- If the file has a syntax error, the preview reports it on the context file. YAML and TOML errors include the line number.
+
 For additional context on renderer behavior and troubleshooting, review the [README](../README.md) and supporting documents in the repository root.

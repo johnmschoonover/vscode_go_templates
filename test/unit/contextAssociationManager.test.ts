@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { ContextAssociationManager } from '../../src/context/contextAssociationManager';
+import { contextFormatFromFileName } from '../../src/context/contextManager';
 import type { ContextDescriptor, ContextStore } from '../../src/context/contextManager';
 import type { ConfigurationService, WorkspaceConfiguration } from '../../src/services/configurationService';
 import { __test } from '../__mocks__/vscode';
@@ -12,6 +13,7 @@ function descriptor(relativePath: string): ContextDescriptor {
     uri: vscode.Uri.file(`${ROOT}/${relativePath}`),
     label: relativePath.replace(/^.*\//, '').replace(/\.[^.]+$/, ''),
     relativePath,
+    format: contextFormatFromFileName(relativePath) ?? 'json',
   };
 }
 

@@ -4,6 +4,7 @@ import { RendererService } from './services/rendererService';
 import { ContextStore } from './context/contextManager';
 import { ContextTreeDataProvider } from './context/contextTreeDataProvider';
 import { ContextAssociationManager } from './context/contextAssociationManager';
+import { registerContextCommands, resolveContextTarget } from './context/contextCommands';
 import { PreviewManager } from './services/previewManager';
 import { DiagnosticService } from './services/diagnosticService';
 
@@ -60,8 +61,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('goTemplateStudio.openContextFile', async (uri: vscode.Uri) => {
-      const document = await vscode.workspace.openTextDocument(uri);
+    vscode.commands.registerCommand('goTemplateStudio.openContextFile', async (target?: unknown) => {
+      // Accepts a Uri (tree item click), a ContextTreeItem (view context menu), or nothing (palette).
+      const descriptor = await resolveContextTarget(contextStore, target, 'Select a context file to open');
+      if (!descriptor) {
+        return;
+      }
+      const document = await vscode.workspace.openTextDocument(descriptor.uri);
       await vscode.window.showTextDocument(document, { preview: false });
     })
   );
@@ -153,6 +159,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       await previewManager.showPreview(templateUri, contextUri, editor.document.languageId);
+    })
+  );
+
+  context.subscriptions.push(
+    ...registerContextCommands({
+      contextStore,
+      associationManager,
+      output: outputChannel,
+      onDidAssociate: (templateUri, descriptor) => previewManager.updateContext(templateUri, descriptor.uri),
     })
   );
 }
