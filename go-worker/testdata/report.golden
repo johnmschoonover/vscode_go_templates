@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quarterly Team Report</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; color: #1f2937; }
+      table { border-collapse: collapse; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <h1>Quarterly Team Report (Q3)</h1>
+    <p>3 teams, 2 metrics each</p>
+    <section>
+      <h2>DATA</h2>
+      <p>Lead: unassigned</p>
+      <p>Members: none yet</p>
+      <table>
+        <tr><th>Metric</th><th>Score</th></tr>
+        <tr><td>reliability</td><td>n/a</td></tr>
+        <tr><td>velocity</td><td>n/a</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>PLATFORM</h2>
+      <p>Lead: Ada</p>
+      <p>Members: Ada, Grace, Linus</p>
+      <table>
+        <tr><th>Metric</th><th>Score</th></tr>
+        <tr><td>reliability</td><td>97.5</td></tr>
+        <tr><td>velocity</td><td>82.0</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>WEB</h2>
+      <p>Lead: unassigned</p>
+      <p>Members: Ken, Rob</p>
+      <table>
+        <tr><th>Metric</th><th>Score</th></tr>
+        <tr><td>reliability</td><td>91.0</td></tr>
+        <tr><td>velocity</td><td>88.4</td></tr>
+      </table>
+    </section>
+    <p><em>No notes this quarter.</em></p>
+  </body>
+</html>

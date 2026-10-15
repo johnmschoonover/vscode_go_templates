@@ -2,6 +2,17 @@
 
 Use this guide to render templates quickly with the Go Template Studio extension.
 
+## Sample Templates
+
+The repository ships sample templates in `templates/` with matching context files in `context/`. Open one, run **Go Template Studio: Preview Template**, and pick the context with the same base name:
+
+- `deployment.yaml.tmpl` + `deployment.yaml`: a YAML context rendered into a Kubernetes manifest with `range` and `{{- -}}` whitespace control (a text template, so the preview shows Text).
+- `welcome.html.tmpl` + `welcome.toml`: an HTML email from a TOML context. The `.html` before `.tmpl` turns on `html/template`, so a `<script>` tag in the context shows as escaped text.
+- `report.go.tmpl` + `report.json`: nested JSON with `with`, `range $k, $v`, a `define`d block, `printf`, and the helpers below.
+- `asdf.go.tmpl` + `asdf.json` and `inline.go.tmpl` (no context) are the minimal starters.
+
+The [README](../README.md#sample-assets) describes what each sample demonstrates.
+
 ## Built-in Template Helpers
 
 The bundled Go renderer automatically registers a helper map for every template render. You can call these helpers without importing additional packages or preparing a context file.

@@ -1,0 +1,35 @@
+{{- /* Demonstrates text/template with a YAML context: range over a list and a map ($k, $v), and {{- -}} whitespace control. */ -}}
+{{- /* The output is a plain-text Kubernetes Deployment manifest, so the preview's HTML view falls back to Text. */ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Name }}
+  namespace: {{ default "default" .Namespace }}
+  labels:
+    {{- range $k, $v := .Labels }}
+    {{ $k }}: {{ printf "%q" $v }}
+    {{- end }}
+spec:
+  replicas: {{ .Replicas }}
+  selector:
+    matchLabels:
+      app: {{ printf "%q" .Labels.app }}
+  template:
+    metadata:
+      labels:
+        {{- range $k, $v := .Labels }}
+        {{ $k }}: {{ printf "%q" $v }}
+        {{- end }}
+    spec:
+      containers:
+        - name: {{ .Name }}
+          image: "{{ .Image.Repository }}:{{ .Image.Tag }}"
+          ports:
+            - containerPort: {{ .Port }}
+          {{- with .Env }}
+          env:
+            {{- range . }}
+            - name: {{ .Name }}
+              value: {{ printf "%q" .Value }}
+            {{- end }}
+          {{- end }}

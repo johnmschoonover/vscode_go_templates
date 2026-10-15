@@ -1,0 +1,20 @@
+# Context for templates/welcome.html.tmpl.
+Product = "Go Template Studio"
+# DisplayName carries a <script> tag on purpose. The template prints it, and because
+# welcome.html.tmpl renders with html/template the tag is escaped to &lt;script&gt;...,
+# so the preview shows it as text instead of running it.
+DisplayName = "Gopher <script>alert(1)</script>"
+SupportEmail = "support@example.com"
+
+[[Links]]
+Title = "Read the quickstart"
+URL = "https://example.com/quickstart"
+
+[[Links]]
+Title = "Browse the sample templates"
+URL = "https://example.com/samples"
+
+[Footer]
+Company = "Example Co."
+Address = "123 Template Lane, Gopher City"
+Unsubscribe = "https://example.com/unsubscribe"

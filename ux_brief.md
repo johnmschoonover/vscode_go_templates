@@ -43,7 +43,8 @@
 - Localize UI copy via `package.nls.json` with English as default; prepare structure for future locales without delaying MVP.
 
 ## 6. Content & Documentation
-- Bundle `docs/quickstart.md` and `samples/` templates referenced in onboarding notifications.
+- Bundle `docs/quickstart.md` and the sample templates in `templates/` (contexts in `context/`) referenced in onboarding notifications.
+  - **Status:** 🟡 Samples shipped. `templates/` and `context/` hold the `asdf`, `inline`, `deployment` (YAML context, text output), `welcome` (TOML context, `.html.tmpl`, escaped `<script>` value), and `report` (nested JSON, `define`/`template`, helpers) samples, documented in the README "Sample Assets" section and the quickstart. The Show Welcome notification does not link to them yet: opening a sample from the installed extension's read-only folder is not a good first-run experience, so that link is a follow-up (for example, copying the samples into the workspace).
 - Link to GitHub issues for feedback directly from the preview toolbar `Help` menu.
 - Include context-sensitive tips (e.g., "Need a sample context? Generate one now") as dismissible notifications.
 
