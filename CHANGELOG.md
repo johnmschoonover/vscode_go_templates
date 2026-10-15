@@ -33,7 +33,7 @@ First feature release after the `v1.0.x` packaging tags. Earlier tags shipped th
 ### Fixed
 - The editor title preview button now matches the contributed `go-templates` language id (plus `.tmpl`, `.tpl`, and `.gotmpl` extensions).
 - Errors in unsaved templates and context files are reported on the file you are editing (squiggles, Problems panel, and the preview sidebar) instead of on a temporary snapshot file.
-- The HTML view now works for `.tmpl`/`.tpl`/`.gotmpl` templates: a template is HTML when it has an inner `.html`/`.htm` extension (`email.html.tmpl`) or starts with `<!DOCTYPE html>` or `<html>`, and the renderer uses `html/template` escaping for exactly those templates.
+- The HTML view now works for `.tmpl`/`.tpl`/`.gotmpl` templates: a template is HTML when it has an inner `.html`/`.htm` extension (`email.html.tmpl`) or starts with `<!DOCTYPE html>` or `<html>` after any leading whitespace or `{{/* ... */}}` comments, and the renderer uses `html/template` escaping for exactly those templates.
 - The `go run` renderer fallback no longer needs network access or a warm Go module cache (the worker's dependencies are vendored) and ignores unrelated `go.work` files (`GOWORK=off`).
 - Command Palette entries no longer repeat the category ("Go Template Studio: Go Template Studio: …").
 

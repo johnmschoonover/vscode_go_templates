@@ -37,7 +37,7 @@ With the default `auto` renderer mode, no Go installation is required when a bun
 
 ### Preview Toolbar, Export, and Status Bar
 - The preview opens with a toolbar offering **Refresh**, **Export…**, and a **View** switch:
-  - **HTML** renders HTML output in the isolated iframe. A template counts as HTML when its name ends in `.html`/`.htm`, has `.html`/`.htm` before the template extension (`email.html.tmpl`), or its content starts with `<!DOCTYPE html>` or `<html>`; those render with `html/template` escaping, everything else with `text/template`. Text templates fall back to Text, and the toolbar notes the fallback.
+  - **HTML** renders HTML output in the isolated iframe. A template counts as HTML when its name ends in `.html`/`.htm`, has `.html`/`.htm` before the template extension (`email.html.tmpl`), or its content starts with `<!DOCTYPE html>` or `<html>` (leading whitespace and `{{/* ... */}}` comments are skipped); those render with `html/template` escaping, everything else with `text/template`. Text templates fall back to Text, and the toolbar notes the fallback.
   - **Text** shows the output as plain text. For HTML output, markup is stripped to a simplified, readable form.
   - **Raw** shows the rendered source with markup visible.
 - The chosen view mode is remembered per workspace. Until you choose one, `goTemplateStudio.defaultViewMode` (`html`, `text`, or `raw`) applies. **Go Template Studio: Toggle Preview View Mode** cycles the modes from the palette or a keybinding, and a keybinding can pass `"html"`, `"text"`, or `"raw"` as `args` to jump straight to one.
