@@ -164,4 +164,31 @@ describe('ContextAssociationManager', () => {
 
     expect(manager.listContexts()).toEqual([home, other]);
   });
+
+  describe('clearContext', () => {
+    it('removes every association to the context, including defaults, and fires one change', () => {
+      const { manager } = createHarness({ 'templates/a.tmpl': 'context/home.json' }, [home, other]);
+      manager.setActiveContext(templateUri('templates/b.tmpl'), home);
+      manager.setActiveContext(templateUri('templates/c.tmpl'), other);
+      const changes: Array<vscode.Uri | undefined> = [];
+      manager.onDidChange((uri) => changes.push(uri));
+
+      expect(manager.clearContext(home)).toBe(2);
+
+      expect(manager.getActiveContext(templateUri('templates/a.tmpl'))).toBeUndefined();
+      expect(manager.getActiveContext(templateUri('templates/b.tmpl'))).toBeUndefined();
+      expect(manager.getActiveContext(templateUri('templates/c.tmpl'))).toBe(other);
+      expect(changes).toEqual([undefined]);
+    });
+
+    it('does nothing when no template uses the context', () => {
+      const { manager } = createHarness({}, [home, other]);
+      manager.setActiveContext(templateUri('templates/c.tmpl'), other);
+      const changes: Array<vscode.Uri | undefined> = [];
+      manager.onDidChange((uri) => changes.push(uri));
+
+      expect(manager.clearContext(home)).toBe(0);
+      expect(changes).toEqual([]);
+    });
+  });
 });

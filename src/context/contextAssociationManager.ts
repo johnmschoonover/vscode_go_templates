@@ -55,6 +55,27 @@ export class ContextAssociationManager {
     this.onDidChangeEmitter.fire(templateUri);
   }
 
+  /**
+   * Forgets every template association that points at `context` (e.g. after the file is deleted) and
+   * returns how many were removed. Persisted defaultContext entries are only dropped in memory.
+   */
+  public clearContext(context: Pick<ContextDescriptor, 'relativePath'>): number {
+    const target = this.normalizePath(context.relativePath);
+    let removed = 0;
+    for (const [templatePath, contextPath] of [...this.associations.entries()]) {
+      if (this.normalizePath(contextPath) === target) {
+        this.associations.delete(templatePath);
+        removed += 1;
+      }
+    }
+
+    if (removed > 0) {
+      this.output.appendLine(`[context] cleared ${removed} association(s) to ${context.relativePath}`);
+      this.onDidChangeEmitter.fire(undefined);
+    }
+    return removed;
+  }
+
   public dispose(): void {
     this.onDidChangeEmitter.dispose();
   }

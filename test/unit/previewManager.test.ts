@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { DiagnosticService } from '../../src/services/diagnosticService';
-import { PreviewManager } from '../../src/services/previewManager';
+import { isHtmlTemplate, PreviewManager } from '../../src/services/previewManager';
 import type { RendererService, RenderResult } from '../../src/services/rendererService';
 import { __test, MockWebviewPanel, ViewColumn } from '../__mocks__/vscode';
 
@@ -296,6 +296,111 @@ describe('PreviewManager', () => {
       await manager.showPreview(templateA, undefined, 'go-templates');
 
       expect(manager.getRenderState(templateA)).toEqual({ degraded: true, message: 'go: not found' });
+    });
+  });
+
+  describe('HTML detection', () => {
+    it.each([
+      ['/ws/index.html', 'plain', true],
+      ['/ws/INDEX.HTM', 'plain', true],
+      ['/ws/templates/email.html.tmpl', 'Hello', true],
+      ['/ws/templates/page.HTM.gotmpl', 'Hello', true],
+      ['/ws/templates/page.html.tpl', 'Hello', true],
+      ['/ws/templates/notes.txt.tmpl', 'Hello', false],
+      ['/ws/site.html/readme.tmpl', 'Hello', false],
+      ['/ws/templates/asdf.go.tmpl', '<!DOCTYPE html>\n<html></html>', true],
+      ['/ws/templates/page.tmpl', '\n  \t<!doctype html>', true],
+      ['/ws/templates/page.tmpl', '\ufeff<!DOCTYPE html>', true],
+      ['/ws/templates/page.tpl', '<HTML lang="en">', true],
+      ['/ws/templates/page.tpl', '<html>', true],
+      ['/ws/templates/partial.tmpl', '<div>{{.}}</div>', false],
+      ['/ws/templates/page.tmpl', '{{/* c */}}<!DOCTYPE html>', false],
+      ['/ws/templates/page.tmpl', '<htmlish>', false],
+      ['/ws/templates/page.tmpl', undefined, false],
+    ])('isHtmlTemplate(%j, %j) is %s', (fsPath, content, expected) => {
+      expect(isHtmlTemplate(fsPath, content)).toBe(expected);
+    });
+
+    it('sniffs the template file on disk for the HTML view', async () => {
+      const { manager } = createManager();
+      const template = vscode.Uri.file('/ws/templates/asdf.go.tmpl');
+      __test.writeFile(template.fsPath, '<!DOCTYPE html>\n<title>{{.Title}}</title>');
+
+      await manager.showPreview(template, undefined, 'go-templates');
+
+      expect(lastPayload(panels()[0]).isHtml).toBe(true);
+      expect(manager.getRenderSnapshot(template)?.isHtml).toBe(true);
+    });
+
+    it('uses the unsaved document text over the file on disk', async () => {
+      const { manager } = createManager();
+      __test.writeFile(templateA.fsPath, 'plain text');
+      __test.setTextDocuments([
+        { uri: templateA, version: 2, isDirty: true, getText: () => '<html><body></body></html>' },
+      ]);
+
+      await manager.showPreview(templateA, undefined, 'go-templates');
+
+      expect(lastPayload(panels()[0]).isHtml).toBe(true);
+    });
+
+    it('treats a template without HTML markers as text', async () => {
+      const { manager } = createManager();
+      __test.writeFile(templateA.fsPath, 'Hello {{.Name}}');
+
+      await manager.showPreview(templateA, undefined, 'go-templates');
+
+      expect(lastPayload(panels()[0]).isHtml).toBe(false);
+    });
+  });
+
+  describe('export target fallback', () => {
+    async function openTwoPreviewsWithoutFocus(render?: RenderFn) {
+      const created = createManager(render);
+      await created.manager.showPreview(templateA, undefined, 'go-templates');
+      await created.manager.showPreview(templateB, undefined, 'go-templates');
+      // The last-active preview was closed and the active editor is not a previewed template.
+      const templateC = vscode.Uri.file('/ws/templates/c.tmpl');
+      await created.manager.showPreview(templateC, undefined, 'go-templates');
+      created.manager.closePreview(templateC);
+      __test.setActiveTextEditor(__test.createTextEditor('/ws/notes.md', ViewColumn.One, 'markdown'));
+      return created;
+    }
+
+    it('uses the only preview with a successful render', async () => {
+      const { manager } = await openTwoPreviewsWithoutFocus(async (template) =>
+        template.toString() === templateB.toString() ? renderResult({ rendered: '', errorMessage: 'bad' }) : renderResult()
+      );
+
+      expect(manager.getRenderedTemplates().map((uri) => uri.toString())).toEqual([templateA.toString()]);
+      expect(manager.getRenderSnapshot()?.templateUri.toString()).toBe(templateA.toString());
+    });
+
+    it('returns no snapshot when several previews rendered, and lists them for a choice', async () => {
+      const { manager } = await openTwoPreviewsWithoutFocus();
+
+      expect(manager.getRenderSnapshot()).toBeUndefined();
+      expect(manager.getRenderedTemplates().map((uri) => uri.toString())).toEqual([
+        templateA.toString(),
+        templateB.toString(),
+      ]);
+      expect(manager.getRenderSnapshot(templateB)?.templateUri.toString()).toBe(templateB.toString());
+    });
+  });
+
+  describe('context usage', () => {
+    it('lists the templates whose preview renders with a context, and detaches them', async () => {
+      const contextUri = vscode.Uri.file('/ws/context/data.json');
+      const { manager, render } = createManager();
+      await manager.showPreview(templateA, contextUri, 'go-templates');
+      await manager.showPreview(templateB, vscode.Uri.file('/ws/context/other.json'), 'go-templates');
+
+      const users = manager.getTemplatesUsingContext(vscode.Uri.file('/ws/context/data.json'));
+      expect(users.map((uri) => uri.toString())).toEqual([templateA.toString()]);
+
+      await manager.updateContext(templateA, undefined);
+      expect(render).toHaveBeenLastCalledWith(templateA, undefined);
+      expect(manager.getTemplatesUsingContext(contextUri)).toEqual([]);
     });
   });
 });

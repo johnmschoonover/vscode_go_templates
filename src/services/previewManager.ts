@@ -25,6 +25,35 @@ export function isViewMode(value: unknown): value is ViewMode {
   return typeof value === 'string' && (VIEW_MODES as readonly string[]).includes(value);
 }
 
+const TEMPLATE_EXTENSIONS = new Set(['.tmpl', '.tpl', '.gotmpl']);
+const HTML_EXTENSIONS = new Set(['.html', '.htm']);
+/** Content starting with an HTML doctype or <html> element (ASCII whitespace only, as in Go's `\s`). */
+const HTML_DOCUMENT_PATTERN = /^[\t\n\f\r ]*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])/i;
+
+/**
+ * Whether a template renders HTML, which enables the preview's HTML view. Mirrors `isHTMLTemplate` in
+ * go-worker/main.go (which picks html/template, so escaping matches the view): a `.html`/`.htm`
+ * extension, an inner `.html`/`.htm` extension before a template extension (`email.html.tmpl`), or
+ * otherwise content that starts with an HTML doctype or `<html>` element. The language id is not
+ * consulted because the worker cannot see it.
+ */
+export function isHtmlTemplate(fsPath: string, content: string | undefined): boolean {
+  const fileName = path.basename(fsPath).toLowerCase();
+  const extension = path.extname(fileName);
+  if (HTML_EXTENSIONS.has(extension)) {
+    return true;
+  }
+  if (TEMPLATE_EXTENSIONS.has(extension)) {
+    const inner = path.extname(fileName.slice(0, -extension.length));
+    if (HTML_EXTENSIONS.has(inner)) {
+      return true;
+    }
+  }
+
+  const text = content?.startsWith('\ufeff') ? content.slice(1) : content;
+  return text !== undefined && HTML_DOCUMENT_PATTERN.test(text);
+}
+
 const VIEW_MODE_STATE_KEY = 'goTemplateStudio.preview.viewMode';
 const LAYOUT_STATE_KEY = 'goTemplateStudio.preview.layout';
 
@@ -338,9 +367,17 @@ export class PreviewManager implements vscode.Disposable {
     return true;
   }
 
-  /** Returns the most recent successful render of the given (or active) preview, if any. */
+  /**
+   * Returns the most recent successful render of the given (or active) preview, if any. Without a
+   * template and without an active preview, falls back to the only preview that has rendered
+   * successfully; when several have, callers can offer `getRenderedTemplates()` as a choice.
+   */
   public getRenderSnapshot(templateUri?: vscode.Uri): RenderSnapshot | undefined {
-    const session = this.resolveSession(templateUri);
+    let session = this.resolveSession(templateUri);
+    if (!session && !templateUri) {
+      const rendered = this.getRenderedSessions();
+      session = rendered.length === 1 ? rendered[0] : undefined;
+    }
     const last = session?.lastSuccessful;
     if (!session || !last) {
       return undefined;
@@ -354,6 +391,22 @@ export class PreviewManager implements vscode.Disposable {
       renderedAt: last.renderedAt,
       isStale: Boolean(session.renderState?.degraded),
     };
+  }
+
+  /** Templates whose open preview has a successful render to export. */
+  public getRenderedTemplates(): vscode.Uri[] {
+    return this.getRenderedSessions().map((session) => session.templateUri);
+  }
+
+  /** Templates whose open preview renders with `contextUri`. */
+  public getTemplatesUsingContext(contextUri: vscode.Uri): vscode.Uri[] {
+    return Array.from(this.sessions.values())
+      .filter((session) => session.contextUri && this.isSameResource(session.contextUri, contextUri))
+      .map((session) => session.templateUri);
+  }
+
+  private getRenderedSessions(): PreviewSession[] {
+    return Array.from(this.sessions.values()).filter((session) => !session.disposed && session.lastSuccessful);
   }
 
   public getRenderState(templateUri: vscode.Uri): PreviewRenderState | undefined {
@@ -471,7 +524,7 @@ export class PreviewManager implements vscode.Disposable {
       session.templateSignature = templateSignature;
       session.contextSignature = contextSignature;
 
-      const isHtml = this.isHtmlTemplate(session);
+      const isHtml = isHtmlTemplate(session.templateUri.fsPath, await this.readTemplateText(session.templateUri));
       const rendererState = {
         rendererMode: result.rendererMode,
         rendererFallback: result.rendererFallback,
@@ -563,13 +616,18 @@ export class PreviewManager implements vscode.Disposable {
     }
   }
 
-  private isHtmlTemplate(session: PreviewSession): boolean {
-    const extension = path.extname(session.templateUri.fsPath).toLowerCase();
-    if (extension === '.html' || extension === '.htm') {
-      return true;
+  /** The template text the renderer saw: the open (possibly unsaved) document, else the file on disk. */
+  private async readTemplateText(uri: vscode.Uri): Promise<string | undefined> {
+    const openDocument = vscode.workspace.textDocuments.find((doc) => this.isSameResource(doc.uri, uri));
+    if (openDocument) {
+      return openDocument.getText();
     }
 
-    return session.languageId === 'html' || session.languageId === 'gotemplate';
+    try {
+      return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    } catch {
+      return undefined;
+    }
   }
 
   private handleUriCase(value: string): string {

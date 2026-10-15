@@ -23,6 +23,7 @@ First public release.
 - Built-in template helpers: `list`, `map`/`dict`, `default`, `join`, `safe`, `escape`, and string filters (`upper`, `lower`, `title`, `capitalize`, `trim`, `replace`).
 - **Go Templates** language mode (`.tmpl`, `.gotmpl`, `.tpl`) with TextMate syntax highlighting from the vendored [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template) grammar.
 - Bundled `go-worker` renderer binaries for `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`, with a `go run` fallback for development builds.
+- Tagged releases attach the packaged `.vsix` to the GitHub release (and every release run keeps it as a workflow artifact) for sideloading and rollback.
 - Settings `goTemplateStudio.goBinary` and `goTemplateStudio.rendererMode` (`auto`, `bundled`, `system`).
 - Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, Open Context File, Create/Duplicate/Delete Context File, Export Rendered Output, Refresh Preview, Toggle Preview View Mode, Toggle Side-by-Side Preview, and Set Preview Layout.
 - Marketplace packaging: extension icon, gallery banner, keywords, Sponsor link, and a **Buy me a coffee** button on the welcome notification.
@@ -31,5 +32,9 @@ First public release.
 
 ### Fixed
 - The editor title preview button now matches the contributed `go-templates` language id (plus `.tmpl`, `.tpl`, and `.gotmpl` extensions).
+- Errors in unsaved templates and context files are reported on the file you are editing (squiggles, Problems panel, and the preview sidebar) instead of on a temporary snapshot file.
+- The HTML view now works for `.tmpl`/`.tpl`/`.gotmpl` templates: a template is HTML when it has an inner `.html`/`.htm` extension (`email.html.tmpl`) or starts with `<!DOCTYPE html>` or `<html>`, and the renderer uses `html/template` escaping for exactly those templates.
+- The `go run` renderer fallback no longer needs network access or a warm Go module cache (the worker's dependencies are vendored) and ignores unrelated `go.work` files (`GOWORK=off`).
+- Command Palette entries no longer repeat the category ("Go Template Studio: Go Template Studio: …").
 
 [0.1.0]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v0.1.0

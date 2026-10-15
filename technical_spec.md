@@ -19,7 +19,7 @@
 ## 3. Module Breakdown
 - **Preview Manager:** Handles creation of WebView panels, message routing, diff/view mode toggles, and live updates. Keeps one panel per template document, reveals a template's panel when its editor becomes active (`goTemplateStudio.preview.followActiveEditor`), and places new panels by the preview layout (`beside` or `below`, chosen per workspace and defaulting to `goTemplateStudio.preview.layout`). The pure placement rules are in `src/services/previewLayout.ts`. It publishes per-template render state (failure, resolved renderer mode, `auto` fallback) through `onDidChangeState` for the status bar.
 - **Context Manager:** Provides tree data provider for context files, CRUD operations, schema validation, and default context association per template.
-- **Renderer Service:** Encapsulates process management for the Go worker, caches compiled templates, and reports diagnostics. Each `RenderResult` names the renderer that ran (`rendererMode`: `bundled` or `system`) and whether `auto` mode fell back to the system toolchain (`rendererFallback`).
+- **Renderer Service:** Encapsulates process management for the Go worker, caches compiled templates, and reports diagnostics. Unsaved documents are rendered from temporary snapshots that are removed after each render, and diagnostics naming a snapshot are mapped back to the edited file. The system fallback runs `go run -mod=vendor .` in `go-worker/` with `GOWORK=off`, using the vendored YAML/TOML modules. Each `RenderResult` names the renderer that ran (`rendererMode`: `bundled` or `system`) and whether `auto` mode fell back to the system toolchain (`rendererFallback`).
 - **Configuration Service:** Reads and writes `.vscode/goTemplateStudio.json`, merges workspace/user settings, and supports multi-root workspaces.
 - **Telemetry Service:** Wrapper around VS Code telemetry reporter; disabled by default and collects only anonymous event counts when enabled.
 - **Export Service:** Streams rendered output to filesystem targets or clipboard and packages shareable bundles (template + context JSON).
@@ -45,7 +45,7 @@
     "lastUsed": "2024-04-18T10:30:00Z"
   }
   ```
-  - `format` is one of `json`, `yaml` (`.yaml`/`.yml`), or `toml`, derived from the file extension (`ContextDescriptor.format` in `src/context/contextManager.ts`). The Go worker picks its decoder from the same extensions and normalizes YAML/TOML into the map and slice shapes `encoding/json` produces. `lastUsed` is not implemented yet.
+  - `format` is one of `json`, `yaml` (`.yaml`/`.yml`), or `toml`, derived from the file extension (`ContextDescriptor.format` in `src/context/contextManager.ts`). The Go worker picks its decoder from the same extensions and normalizes YAML/TOML into the shapes `encoding/json` produces: maps and slices, `float64` for every number, and RFC 3339 strings for dates and times. `lastUsed` is not implemented yet.
   - YAML/TOML parse failures return a context diagnostic with `file` set to the context path and `line`/`column` when the decoder reports them. yaml.v3 gives a line only; TOML gives line and column.
 - **Renderer Request:**
   ```json

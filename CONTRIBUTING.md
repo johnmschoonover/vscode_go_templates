@@ -20,6 +20,8 @@ Thanks for your interest in improving Go Template Studio! This guide covers loca
 
 Development builds fall back to `go run` when no bundled renderer binary exists under `assets/bin/`, so a local Go toolchain is all you need. In `auto` mode the status bar shows a warning icon for this fallback. Set `goTemplateStudio.rendererMode` to `system` to silence it. Use the `goTemplateStudio.rendererMode` and `goTemplateStudio.goBinary` settings to force a specific renderer.
 
+The worker's Go dependencies are vendored in `go-worker/vendor/` so the `go run` fallback works offline. After changing `go-worker/go.mod`, run `go mod vendor` in `go-worker/` and commit the result. Check formatting with `gofmt -l main.go main_test.go` (the vendored files are left as upstream wrote them).
+
 ## Workflow Checks
 Run these before opening a pull request; CI runs the same checks:
 

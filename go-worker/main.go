@@ -236,11 +236,37 @@ func parseTOMLContext(content []byte) (interface{}, error) {
 	return normalizeContextValue(data), nil
 }
 
-// normalizeContextValue converts decoder-specific container types into the
-// shapes encoding/json produces (map[string]interface{} and []interface{}) so
-// templates behave identically regardless of the context file format.
+// normalizeContextValue converts decoder-specific types into the shapes
+// encoding/json produces so templates behave identically regardless of the
+// context file format: containers become map[string]interface{} and
+// []interface{}, every integer and float type becomes float64 (as JSON numbers
+// do), and dates/times become strings.
 func normalizeContextValue(value interface{}) interface{} {
 	switch typed := value.(type) {
+	case int:
+		return float64(typed)
+	case int8:
+		return float64(typed)
+	case int16:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case uint:
+		return float64(typed)
+	case uint8:
+		return float64(typed)
+	case uint16:
+		return float64(typed)
+	case uint32:
+		return float64(typed)
+	case uint64:
+		return float64(typed)
+	case float32:
+		return float64(typed)
+	case time.Time:
+		return formatContextTime(typed)
 	case map[string]interface{}:
 		for key, item := range typed {
 			typed[key] = normalizeContextValue(item)
@@ -268,11 +294,36 @@ func normalizeContextValue(value interface{}) interface{} {
 	}
 }
 
+// TOML local date/time values decode with these zone names (see the toml
+// package's internal LocalDatetime/LocalDate/LocalTime locations); they carry
+// no real offset, so they are formatted without one.
+const (
+	tomlLocalDatetimeZone = "datetime-local"
+	tomlLocalDateZone     = "date-local"
+	tomlLocalTimeZone     = "time-local"
+)
+
+// formatContextTime renders decoded dates/times as RFC 3339 strings (the
+// full-date or partial-time subset for TOML local dates and times) so a
+// context value has the same type it would have when written as a JSON string.
+func formatContextTime(value time.Time) string {
+	switch value.Location().String() {
+	case tomlLocalDatetimeZone:
+		return value.Format("2006-01-02T15:04:05.999999999")
+	case tomlLocalDateZone:
+		return value.Format("2006-01-02")
+	case tomlLocalTimeZone:
+		return value.Format("15:04:05.999999999")
+	default:
+		return value.Format(time.RFC3339Nano)
+	}
+}
+
 func renderTemplate(path, content string, data interface{}) (string, error) {
 	name := filepath.Base(path)
 	var execute func(interface{}) (string, error)
 
-	if isHTMLTemplate(path) {
+	if isHTMLTemplate(path, content) {
 		execute = func(value interface{}) (string, error) {
 			tmpl, err := htmltmpl.New(name).Funcs(htmlFuncMap()).Parse(content)
 			if err != nil {
@@ -303,9 +354,35 @@ func renderTemplate(path, content string, data interface{}) (string, error) {
 	return execute(data)
 }
 
-func isHTMLTemplate(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasSuffix(lower, ".html") || strings.HasSuffix(lower, ".htm")
+// templateExtensions are the Go template file extensions contributed by the
+// extension; an HTML extension directly before one (email.html.tmpl) marks the
+// template as HTML.
+var templateExtensions = map[string]bool{".tmpl": true, ".tpl": true, ".gotmpl": true}
+
+// htmlDocumentPattern matches content that starts with an HTML doctype or
+// <html> element (case-insensitive, after optional ASCII whitespace).
+var htmlDocumentPattern = regexp.MustCompile(`(?i)^[\t\n\f\r ]*(?:<!doctype[\t\n\f\r ]+html|<html[\t\n\f\r />])`)
+
+// isHTMLTemplate reports whether a template renders HTML and should therefore
+// use html/template (contextual escaping). The rule must stay in sync with
+// isHtmlTemplate in src/services/previewManager.ts, which picks the preview's
+// HTML view: a .html/.htm extension, an inner .html/.htm extension before a
+// template extension (page.html.tmpl), or otherwise content that starts with
+// an HTML doctype or <html> element.
+func isHTMLTemplate(path, content string) bool {
+	lower := strings.ToLower(filepath.Base(path))
+	ext := filepath.Ext(lower)
+	if ext == ".html" || ext == ".htm" {
+		return true
+	}
+	if templateExtensions[ext] {
+		inner := filepath.Ext(strings.TrimSuffix(lower, ext))
+		if inner == ".html" || inner == ".htm" {
+			return true
+		}
+	}
+
+	return htmlDocumentPattern.MatchString(strings.TrimPrefix(content, "\ufeff"))
 }
 
 func templateList(values ...interface{}) []interface{} {

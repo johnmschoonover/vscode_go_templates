@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ConfigurationService } from './services/configurationService';
 import { RendererService } from './services/rendererService';
@@ -101,8 +102,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand('goTemplateStudio.selectContext', async (target?: unknown) => {
-      // The status bar item passes the template URI so selection still works while the preview has focus.
-      const templateUri = asUri(target) ?? vscode.window.activeTextEditor?.document.uri;
+      // The status bar item passes the template URI; from the palette, fall back to the active editor and
+      // then to the focused preview panel (which has no text editor).
+      const templateUri =
+        asUri(target) ?? vscode.window.activeTextEditor?.document.uri ?? previewManager.getFocusedPreviewTemplate();
       if (!templateUri) {
         void vscode.window.showWarningMessage('Open a Go template file before selecting a context.');
         return;
@@ -257,13 +260,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       associationManager,
       output: outputChannel,
       onDidAssociate: (templateUri, descriptor) => previewManager.updateContext(templateUri, descriptor.uri),
+      onDidDelete: async (descriptor) => {
+        await Promise.all(
+          previewManager
+            .getTemplatesUsingContext(descriptor.uri)
+            .map((templateUri) => previewManager.updateContext(templateUri, undefined))
+        );
+      },
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('goTemplateStudio.exportOutput', async (target?: unknown) => {
       // editor/title passes the template URI; the palette passes nothing and uses the active preview.
-      await exportService.exportRendered(previewManager.getRenderSnapshot(asUri(target)));
+      const templateUri = asUri(target);
+      let snapshot = previewManager.getRenderSnapshot(templateUri);
+      if (!snapshot && !templateUri) {
+        // Several previews and none of them active: let the user choose which render to export.
+        const rendered = previewManager.getRenderedTemplates();
+        if (rendered.length > 1) {
+          const pick = await vscode.window.showQuickPick(
+            rendered.map((uri) => ({
+              label: path.basename(uri.fsPath),
+              description: vscode.workspace.asRelativePath(uri, false),
+              uri,
+            })),
+            { placeHolder: 'Select the preview to export' }
+          );
+          if (!pick) {
+            return;
+          }
+          snapshot = previewManager.getRenderSnapshot(pick.uri);
+        }
+      }
+      await exportService.exportRendered(snapshot);
     })
   );
 

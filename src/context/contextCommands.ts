@@ -17,6 +17,11 @@ export interface ContextCommandDependencies {
   readonly output: vscode.OutputChannel;
   /** Invoked after a newly created context is associated with a template (e.g. to re-render the preview). */
   readonly onDidAssociate?: (templateUri: vscode.Uri, descriptor: ContextDescriptor) => Promise<void> | void;
+  /**
+   * Invoked after a context file was deleted and its template associations were cleared (e.g. to switch
+   * open previews that rendered with it to no context).
+   */
+  readonly onDidDelete?: (descriptor: ContextDescriptor) => Promise<void> | void;
 }
 
 const DEFAULT_CONTEXT_EXTENSION = '.json';
@@ -131,7 +136,7 @@ async function createContext(deps: ContextCommandDependencies): Promise<void> {
     return;
   }
 
-  if (!(await ensureDirectory(directoryUri, directory, folder))) {
+  if (!(await ensureDirectory(directoryUri, directory, folder, output))) {
     return;
   }
 
@@ -214,11 +219,13 @@ async function deleteContext(deps: ContextCommandDependencies, target: unknown):
     return;
   }
 
-  // TODO(context-associations): template associations that point at the deleted file are left
-  // in memory; getActiveContext() already ignores missing files, but a future change could prune
-  // them (and the persisted defaultContext entries) once associations are written back to settings.
   output.appendLine(`[context] Moved ${descriptor.relativePath} to trash`);
+  // Detach the deleted file from templates (status bar reads "No context") and from open previews.
+  // TODO(context-associations): the persisted defaultContext entries in .vscode/goTemplateStudio.json
+  // are not rewritten; prune them once associations are written back to settings.
+  deps.associationManager.clearContext(descriptor);
   await contextStore.refresh();
+  await deps.onDidDelete?.(descriptor);
 }
 
 function getTemplateEditor(): vscode.TextEditor | undefined {
@@ -256,7 +263,8 @@ async function pickContextDirectory(directories: string[]): Promise<string | und
 async function ensureDirectory(
   directoryUri: vscode.Uri,
   directory: string,
-  folder: vscode.WorkspaceFolder
+  folder: vscode.WorkspaceFolder,
+  output: vscode.OutputChannel
 ): Promise<boolean> {
   try {
     const stat = await vscode.workspace.fs.stat(directoryUri);
@@ -278,7 +286,12 @@ async function ensureDirectory(
     return false;
   }
 
-  await vscode.workspace.fs.createDirectory(directoryUri);
+  try {
+    await vscode.workspace.fs.createDirectory(directoryUri);
+  } catch (error) {
+    reportFailure(output, `Failed to create the context folder ${directory}/`, error);
+    return false;
+  }
   return true;
 }
 

@@ -7,7 +7,7 @@
   2. Execute `vsce package` to produce `.vsix` artifact.
   3. Perform manual smoke validation using packaged `.vsix` before publishing.
 - **Publishing:** Use shared Microsoft publisher account (to be created) with MFA enabled. Publish extension as free and open-source with MIT license. Funding links (Marketplace `sponsor` field, `.github/FUNDING.yml`, README badge) are in place.
-- **Rollback Plan:** Maintain previous `.vsix` artifacts; if critical regression occurs, unpublish latest version and republish prior stable release within 24 hours.
+- **Rollback Plan:** Maintain previous `.vsix` artifacts: the `Release` workflow uploads each packaged `.vsix` as a workflow artifact and, for tag runs, attaches it to the GitHub release for that tag. If a critical regression occurs, unpublish the latest version and republish the prior stable release's attached `.vsix` within 24 hours (users can also sideload it with **Extensions: Install from VSIX…**).
 
 ## 2. Documentation & Support
 - **User Docs:**

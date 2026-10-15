@@ -4,8 +4,8 @@
  *
  * Only the surface used by the unit-tested modules is implemented
  * (diagnosticService, configurationService, contextManager,
- * contextAssociationManager, previewLayout, previewManager). Extend it as new
- * modules come under test.
+ * contextAssociationManager, previewLayout, previewManager, rendererService).
+ * Extend it as new modules come under test.
  *
  * Shared state (virtual filesystem, workspace folders, watchers, diagnostic
  * collections, webview panels, the active editor, executed commands) is
@@ -544,6 +544,11 @@ export const __test = {
 
   removeFile(fsPath: string): void {
     virtualFiles.delete(Uri.file(fsPath).path);
+  },
+
+  /** Replace `workspace.textDocuments` (open documents: `{ uri, version?, isDirty?, getText? }`). */
+  setTextDocuments(documents: unknown[]): void {
+    workspace.textDocuments = documents;
   },
 
   setConfigurationValue(key: string, value: unknown): void {

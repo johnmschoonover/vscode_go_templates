@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExecuteRequiresTemplatePath(t *testing.T) {
@@ -202,18 +203,69 @@ func TestRenderTemplateSelectsEngine(t *testing.T) {
 }
 
 func TestIsHTMLTemplate(t *testing.T) {
-	cases := map[string]bool{
-		"index.html":    true,
-		"index.HTML":    true,
-		"partial.htm":   true,
-		"partial.txt":   false,
-		"template.tmpl": false,
+	cases := []struct {
+		name     string
+		path     string
+		content  string
+		expected bool
+	}{
+		{name: "html extension", path: "index.html", content: "plain", expected: true},
+		{name: "uppercase html extension", path: "index.HTML", content: "plain", expected: true},
+		{name: "htm extension", path: "partial.htm", content: "plain", expected: true},
+		{name: "txt extension", path: "partial.txt", content: "plain", expected: false},
+		{name: "plain tmpl", path: "template.tmpl", content: "Hello {{.Name}}", expected: false},
+		{name: "inner html before tmpl", path: "email.html.tmpl", content: "Hello", expected: true},
+		{name: "inner htm before gotmpl", path: "page.HTM.gotmpl", content: "Hello", expected: true},
+		{name: "inner html before tpl", path: "/work/dir.x/page.html.tpl", content: "Hello", expected: true},
+		{name: "inner txt before tmpl", path: "notes.txt.tmpl", content: "Hello", expected: false},
+		{name: "html directory does not count", path: "/site.html/readme.tmpl", content: "Hello", expected: false},
+		{name: "doctype sniffed", path: "asdf.go.tmpl", content: "<!DOCTYPE html>\n<html></html>", expected: true},
+		{name: "doctype lowercase after whitespace", path: "page.tmpl", content: "\n  \t<!doctype html>", expected: true},
+		{name: "doctype after bom", path: "page.tmpl", content: "\ufeff<!DOCTYPE html>", expected: true},
+		{name: "html element sniffed", path: "page.tpl", content: "<HTML lang=\"en\">", expected: true},
+		{name: "bare html element", path: "page.tpl", content: "<html>", expected: true},
+		{name: "fragment is not sniffed", path: "partial.tmpl", content: "<div>{{.}}</div>", expected: false},
+		{name: "doctype after text", path: "page.tmpl", content: "{{/* c */}}<!DOCTYPE html>", expected: false},
+		{name: "html prefix of another element", path: "page.tmpl", content: "<htmlish>", expected: false},
 	}
 
-	for path, expected := range cases {
-		if actual := isHTMLTemplate(path); actual != expected {
-			t.Fatalf("expected %s to be %v, got %v", path, expected, actual)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := isHTMLTemplate(tc.path, tc.content); actual != tc.expected {
+				t.Fatalf("isHTMLTemplate(%q, %q) = %v, want %v", tc.path, tc.content, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestRenderTemplateEscapingFollowsHTMLDetection(t *testing.T) {
+	data := map[string]any{"value": "<b>&</b>"}
+	cases := []struct {
+		name     string
+		path     string
+		content  string
+		expected string
+	}{
+		{name: "plain tmpl is not escaped", path: "plain.tmpl", content: "{{.value}}", expected: "<b>&</b>"},
+		{name: "inner html extension is escaped", path: "email.html.tmpl", content: "{{.value}}", expected: "&lt;b&gt;&amp;&lt;/b&gt;"},
+		{
+			name:     "sniffed document is escaped",
+			path:     "asdf.go.tmpl",
+			content:  "<!DOCTYPE html><p>{{.value}}</p>",
+			expected: "<!DOCTYPE html><p>&lt;b&gt;&amp;&lt;/b&gt;</p>",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered, err := renderTemplate(tc.path, tc.content, data)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if rendered != tc.expected {
+				t.Fatalf("rendered %q, want %q", rendered, tc.expected)
+			}
+		})
 	}
 }
 
@@ -632,5 +684,94 @@ func TestExecuteWithStructuredContextFiles(t *testing.T) {
 				t.Fatalf("expected column %d, got %d (%s)", tc.expectedColumn, diag.Column, diag.Message)
 			}
 		})
+	}
+}
+
+func TestNormalizeContextValueScalars(t *testing.T) {
+	offset := time.FixedZone("offset", -7*60*60)
+	cases := []struct {
+		name     string
+		input    interface{}
+		expected interface{}
+	}{
+		{name: "int", input: 3, expected: float64(3)},
+		{name: "int8", input: int8(-3), expected: float64(-3)},
+		{name: "int16", input: int16(3), expected: float64(3)},
+		{name: "int32", input: int32(3), expected: float64(3)},
+		{name: "int64", input: int64(3), expected: float64(3)},
+		{name: "uint", input: uint(3), expected: float64(3)},
+		{name: "uint8", input: uint8(3), expected: float64(3)},
+		{name: "uint16", input: uint16(3), expected: float64(3)},
+		{name: "uint32", input: uint32(3), expected: float64(3)},
+		{name: "uint64", input: uint64(3), expected: float64(3)},
+		{name: "float32", input: float32(1.5), expected: float64(1.5)},
+		{name: "float64", input: 2.25, expected: 2.25},
+		{name: "utc time", input: time.Date(1979, 5, 27, 7, 32, 0, 0, time.UTC), expected: "1979-05-27T07:32:00Z"},
+		{name: "offset time", input: time.Date(1979, 5, 27, 0, 32, 0, 999999000, offset), expected: "1979-05-27T00:32:00.999999-07:00"},
+		{name: "string", input: "text", expected: "text"},
+		{name: "bool", input: true, expected: true},
+		{name: "nil", input: nil, expected: nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := normalizeContextValue(tc.input)
+			if actual != tc.expected {
+				t.Fatalf("normalizeContextValue(%#v) = %#v (%T), want %#v (%T)", tc.input, actual, actual, tc.expected, tc.expected)
+			}
+		})
+	}
+}
+
+func TestParseContextValueTypesMatchJSON(t *testing.T) {
+	cases := []struct {
+		name    string
+		format  contextFormat
+		content string
+	}{
+		{name: "json", format: contextFormatJSON, content: `{"num": 3, "price": 4.5, "big": 9007199254740993, "neg": -2, "list": [1, 2.5], "nested": {"n": 7}, "when": "1979-05-27T07:32:00Z"}`},
+		{name: "yaml", format: contextFormatYAML, content: "num: 3\nprice: 4.5\nbig: 9007199254740993\nneg: -2\nlist: [1, 2.5]\nnested:\n  n: 7\nwhen: 1979-05-27T07:32:00Z\n"},
+		{name: "toml", format: contextFormatTOML, content: "num = 3\nprice = 4.5\nbig = 9007199254740993\nneg = -2\nlist = [1, 2.5]\nwhen = 1979-05-27T07:32:00Z\n[nested]\nn = 7\n"},
+	}
+
+	template := `{{printf "%.2f" .num}}|{{if eq .num 3.0}}three{{end}}|{{printf "%T" .num}}|{{printf "%T" .big}}|{{.neg}}|{{range .list}}{{printf "%T " .}}{{end}}|{{printf "%T" .nested.n}}|{{.when}}|{{printf "%T" .when}}`
+	expected := "3.00|three|float64|float64|-2|float64 float64 |float64|1979-05-27T07:32:00Z|string"
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := parseContext([]byte(tc.content), tc.format)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			rendered, err := renderTemplate("types.tmpl", template, data)
+			if err != nil {
+				t.Fatalf("unexpected render error: %v", err)
+			}
+			if rendered != expected {
+				t.Fatalf("rendered %q, want %q", rendered, expected)
+			}
+		})
+	}
+}
+
+func TestParseContextTOMLLocalDatesAndTimes(t *testing.T) {
+	content := "dt = 1979-05-27T07:32:00.5\nd = 1979-05-27\nt = 07:32:00\noffset = 1979-05-27T07:32:00-07:00\n"
+	data, err := parseContext([]byte(content), contextFormatTOML)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	values := data.(map[string]interface{})
+	expected := map[string]string{
+		"dt":     "1979-05-27T07:32:00.5",
+		"d":      "1979-05-27",
+		"t":      "07:32:00",
+		"offset": "1979-05-27T07:32:00-07:00",
+	}
+	for key, want := range expected {
+		if got := values[key]; got != want {
+			t.Fatalf("%s = %#v (%T), want %q", key, got, got, want)
+		}
 	}
 }

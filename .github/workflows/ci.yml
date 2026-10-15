@@ -45,7 +45,8 @@ jobs:
 
       - name: Check Go formatting
         run: |
-          unformatted="$(gofmt -l go-worker)"
+          # go-worker/vendor holds third-party modules verbatim; only check our own sources.
+          unformatted="$(find go-worker -path go-worker/vendor -prune -o -name '*.go' -print | xargs gofmt -l)"
           if [ -n "$unformatted" ]; then
             echo "These files are not gofmt-formatted:"
             echo "$unformatted"

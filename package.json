@@ -65,72 +65,72 @@
     "commands": [
       {
         "command": "goTemplateStudio.showWelcome",
-        "title": "Go Template Studio: Show Welcome",
+        "title": "Show Welcome",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.preview",
-        "title": "Go Template Studio: Preview Template",
+        "title": "Preview Template",
         "category": "Go Template Studio",
         "icon": "$(preview)"
       },
       {
         "command": "goTemplateStudio.selectContext",
-        "title": "Go Template Studio: Select Context",
+        "title": "Select Context",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.refreshContexts",
-        "title": "Go Template Studio: Refresh Contexts",
+        "title": "Refresh Contexts",
         "category": "Go Template Studio",
         "icon": "$(refresh)"
       },
       {
         "command": "goTemplateStudio.openContextFile",
-        "title": "Go Template Studio: Open Context File",
+        "title": "Open Context File",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.createContext",
-        "title": "Go Template Studio: Create Context File",
+        "title": "Create Context File",
         "category": "Go Template Studio",
         "icon": "$(add)"
       },
       {
         "command": "goTemplateStudio.duplicateContext",
-        "title": "Go Template Studio: Duplicate Context File",
+        "title": "Duplicate Context File",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.deleteContext",
-        "title": "Go Template Studio: Delete Context File",
+        "title": "Delete Context File",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.exportOutput",
-        "title": "Go Template Studio: Export Rendered Output",
+        "title": "Export Rendered Output",
         "category": "Go Template Studio",
         "icon": "$(export)"
       },
       {
         "command": "goTemplateStudio.refreshPreview",
-        "title": "Go Template Studio: Refresh Preview",
+        "title": "Refresh Preview",
         "category": "Go Template Studio",
         "icon": "$(refresh)"
       },
       {
         "command": "goTemplateStudio.toggleViewMode",
-        "title": "Go Template Studio: Toggle Preview View Mode",
+        "title": "Toggle Preview View Mode",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.toggleSideBySidePreview",
-        "title": "Go Template Studio: Toggle Side-by-Side Preview",
+        "title": "Toggle Side-by-Side Preview",
         "category": "Go Template Studio"
       },
       {
         "command": "goTemplateStudio.setPreviewLayout",
-        "title": "Go Template Studio: Set Preview Layout",
+        "title": "Set Preview Layout",
         "category": "Go Template Studio"
       }
     ],
