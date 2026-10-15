@@ -18,7 +18,7 @@ Thanks for your interest in improving Go Template Studio! This guide covers loca
    - For automatic rebuilds, run `npm run watch` and choose **Run Extension (Watch)** instead.
 3. In the Extension Development Host, open `templates/asdf.go.tmpl` and run **Go Template Studio: Preview Template**.
 
-Development builds fall back to `go run` when no bundled renderer binary exists under `assets/bin/`, so a local Go toolchain is all you need. Use the `goTemplateStudio.rendererMode` and `goTemplateStudio.goBinary` settings to force a specific renderer.
+Development builds fall back to `go run` when no bundled renderer binary exists under `assets/bin/`, so a local Go toolchain is all you need. In `auto` mode the status bar shows a warning icon for this fallback. Set `goTemplateStudio.rendererMode` to `system` to silence it. Use the `goTemplateStudio.rendererMode` and `goTemplateStudio.goBinary` settings to force a specific renderer.
 
 ## Workflow Checks
 Run these before opening a pull request; CI runs the same checks:

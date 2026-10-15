@@ -16,11 +16,15 @@ First public release.
 - Export rendered output to a file, to the clipboard, or to a file plus a shareable context bundle under `.gotemplatestudio/shares/`, from the preview toolbar, the editor title bar, or **Export Rendered Output**.
 - Preview toolbar with Refresh, Export, and an HTML / Text / Raw view mode toggle; the chosen mode is remembered per workspace and `goTemplateStudio.defaultViewMode` sets the initial mode.
 - Status bar item showing the active context for the focused template, with a warning when the last render failed; click it to switch context.
+- One preview panel per template: running Preview again reveals the existing panel, and switching to a template editor reveals its preview without taking focus (`goTemplateStudio.preview.followActiveEditor`, default `true`).
+- **Toggle Side-by-Side Preview** command that opens or closes the active template's preview.
+- **Set Preview Layout** command and `goTemplateStudio.preview.layout` setting (`beside`, `below`) to open new previews beside the editor or in an editor group below it; the command's choice is remembered per workspace.
+- The status bar warns when `auto` renderer mode falls back to the system Go toolchain (`go run`), and the preview footer names the renderer that produced the output.
 - Built-in template helpers: `list`, `map`/`dict`, `default`, `join`, `safe`, `escape`, and string filters (`upper`, `lower`, `title`, `capitalize`, `trim`, `replace`).
 - **Go Templates** language mode (`.tmpl`, `.gotmpl`, `.tpl`) with TextMate syntax highlighting from the vendored [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template) grammar.
 - Bundled `go-worker` renderer binaries for `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`, with a `go run` fallback for development builds.
 - Settings `goTemplateStudio.goBinary` and `goTemplateStudio.rendererMode` (`auto`, `bundled`, `system`).
-- Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, Open Context File, Create/Duplicate/Delete Context File, Export Rendered Output, Refresh Preview, and Toggle Preview View Mode.
+- Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, Open Context File, Create/Duplicate/Delete Context File, Export Rendered Output, Refresh Preview, Toggle Preview View Mode, Toggle Side-by-Side Preview, and Set Preview Layout.
 - Marketplace packaging: extension icon, gallery banner, keywords, Sponsor link, and a **Buy me a coffee** button on the welcome notification.
 - Contributor docs: `CONTRIBUTING.md`, GitHub issue templates, and a pull request template.
 - Vitest unit-test harness for the extension services, plus CI checks for unit tests, `gofmt`, `go vet`, and VSIX packaging.

@@ -4,11 +4,13 @@
  *
  * Only the surface used by the unit-tested modules is implemented
  * (diagnosticService, configurationService, contextManager,
- * contextAssociationManager). Extend it as new modules come under test.
+ * contextAssociationManager, previewLayout, previewManager). Extend it as new
+ * modules come under test.
  *
  * Shared state (virtual filesystem, workspace folders, watchers, diagnostic
- * collections) is exposed through the `__test` helper object; call
- * `__test.reset()` from `beforeEach`.
+ * collections, webview panels, the active editor, executed commands) is
+ * exposed through the `__test` helper object; call `__test.reset()` from
+ * `beforeEach`.
  */
 import * as nodePath from 'path';
 
@@ -86,6 +88,14 @@ export class Diagnostic {
 
 export class Disposable {
   public constructor(private readonly callOnDispose: () => void) {}
+
+  public static from(...disposables: Array<{ dispose(): unknown }>): Disposable {
+    return new Disposable(() => {
+      for (const disposable of disposables) {
+        disposable.dispose();
+      }
+    });
+  }
 
   public dispose(): void {
     this.callOnDispose();
@@ -199,6 +209,9 @@ const fs = {
 
 const configurationValues = new Map<string, unknown>();
 let workspaceFolderList: WorkspaceFolder[] | undefined;
+const onDidSaveTextDocumentEmitter = new EventEmitter<unknown>();
+const onDidChangeTextDocumentEmitter = new EventEmitter<unknown>();
+const onDidChangeConfigurationEmitter = new EventEmitter<{ affectsConfiguration(section: string): boolean }>();
 
 export const workspace = {
   get workspaceFolders(): WorkspaceFolder[] | undefined {
@@ -206,6 +219,13 @@ export const workspace = {
   },
 
   fs,
+
+  /** Open documents; the preview manager only reads it for render signatures. */
+  textDocuments: [] as unknown[],
+
+  onDidSaveTextDocument: onDidSaveTextDocumentEmitter.event,
+  onDidChangeTextDocument: onDidChangeTextDocumentEmitter.event,
+  onDidChangeConfiguration: onDidChangeConfigurationEmitter.event,
 
   getConfiguration(section?: string) {
     return {
@@ -297,6 +317,133 @@ export const languages = {
   },
 };
 
+// --- View columns / webview panels ------------------------------------
+
+export enum ViewColumn {
+  Active = -1,
+  Beside = -2,
+  One = 1,
+  Two = 2,
+  Three = 3,
+}
+
+export interface MockTextEditor {
+  readonly document: { readonly uri: Uri; readonly languageId: string };
+  readonly viewColumn?: ViewColumn;
+}
+
+let activeEditor: MockTextEditor | undefined;
+const onDidChangeActiveTextEditorEmitter = new EventEmitter<MockTextEditor | undefined>();
+
+/** Resolves symbolic columns the way VS Code would for a simple one-row layout. */
+function resolveColumn(column: ViewColumn | undefined): ViewColumn {
+  const activeColumn = activeEditor?.viewColumn ?? ViewColumn.One;
+  if (column === ViewColumn.Beside) {
+    return activeColumn + 1;
+  }
+  if (column === ViewColumn.Active || column === undefined) {
+    return activeColumn;
+  }
+  return column;
+}
+
+export class MockWebview {
+  public html = '';
+  public readonly messages: unknown[] = [];
+  private readonly receiveEmitter = new EventEmitter<unknown>();
+  public readonly onDidReceiveMessage = this.receiveEmitter.event;
+
+  public constructor(private readonly isDisposed: () => boolean) {}
+
+  public async postMessage(message: unknown): Promise<boolean> {
+    if (this.isDisposed()) {
+      // Mirrors VS Code, which rejects posts to a disposed webview.
+      throw new Error('Webview is disposed');
+    }
+    this.messages.push(message);
+    return true;
+  }
+
+  /** Test helper: simulate a message from the webview script. */
+  public __receive(message: unknown): void {
+    this.receiveEmitter.fire(message);
+  }
+}
+
+export class MockWebviewPanel {
+  public active = false;
+  public visible = true;
+  public disposed = false;
+  public viewColumn: ViewColumn | undefined;
+  public readonly reveals: Array<{ viewColumn?: ViewColumn; preserveFocus?: boolean }> = [];
+  public readonly webview = new MockWebview(() => this.disposed);
+  private readonly disposeEmitter = new EventEmitter<void>();
+  private readonly viewStateEmitter = new EventEmitter<{ webviewPanel: MockWebviewPanel }>();
+  public readonly onDidDispose = this.disposeEmitter.event;
+  public readonly onDidChangeViewState = this.viewStateEmitter.event;
+
+  public constructor(
+    public readonly viewType: string,
+    public title: string,
+    /** The column passed to createWebviewPanel (may be Active/Beside). */
+    public readonly requestedColumn: ViewColumn | undefined,
+    public readonly preserveFocus: boolean | undefined,
+    public readonly options: unknown
+  ) {
+    this.viewColumn = resolveColumn(requestedColumn);
+  }
+
+  public reveal(viewColumn?: ViewColumn, preserveFocus?: boolean): void {
+    this.reveals.push({ viewColumn, preserveFocus });
+    if (viewColumn !== undefined) {
+      this.viewColumn = resolveColumn(viewColumn);
+    }
+    this.__setViewState({ visible: true });
+  }
+
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.visible = false;
+    this.active = false;
+    this.disposeEmitter.fire();
+  }
+
+  /** Test helper: change visibility/focus and fire onDidChangeViewState. */
+  public __setViewState(state: { active?: boolean; visible?: boolean; viewColumn?: ViewColumn }): void {
+    if (state.active !== undefined) {
+      this.active = state.active;
+    }
+    if (state.visible !== undefined) {
+      this.visible = state.visible;
+    }
+    if (state.viewColumn !== undefined) {
+      this.viewColumn = state.viewColumn;
+    }
+    this.viewStateEmitter.fire({ webviewPanel: this });
+  }
+}
+
+const webviewPanels: MockWebviewPanel[] = [];
+const shownDocuments: Array<{ document: unknown; options: unknown }> = [];
+
+// --- Commands ------------------------------------------------------------
+
+const executedCommands: Array<{ command: string; args: unknown[] }> = [];
+const failingCommands = new Set<string>();
+
+export const commands = {
+  async executeCommand(command: string, ...args: unknown[]): Promise<unknown> {
+    executedCommands.push({ command, args });
+    if (failingCommands.has(command)) {
+      throw new Error(`command '${command}' failed`);
+    }
+    return undefined;
+  },
+};
+
 // --- Window ------------------------------------------------------------
 
 export interface MockOutputChannel {
@@ -309,6 +456,34 @@ export interface MockOutputChannel {
 }
 
 export const window = {
+  get activeTextEditor(): MockTextEditor | undefined {
+    return activeEditor;
+  },
+
+  onDidChangeActiveTextEditor: onDidChangeActiveTextEditorEmitter.event,
+
+  createWebviewPanel(
+    viewType: string,
+    title: string,
+    showOptions: ViewColumn | { viewColumn: ViewColumn; preserveFocus?: boolean },
+    options?: unknown
+  ): MockWebviewPanel {
+    const column = typeof showOptions === 'object' ? showOptions.viewColumn : showOptions;
+    const preserveFocus = typeof showOptions === 'object' ? showOptions.preserveFocus : undefined;
+    const panel = new MockWebviewPanel(viewType, title, column, preserveFocus, options);
+    webviewPanels.push(panel);
+    return panel;
+  },
+
+  async showTextDocument(document: unknown, options?: unknown): Promise<unknown> {
+    shownDocuments.push({ document, options });
+    return activeEditor;
+  },
+
+  setStatusBarMessage(_text: string, _timeout?: number): Disposable {
+    return new Disposable(() => undefined);
+  },
+
   createOutputChannel(name: string): MockOutputChannel {
     const lines: string[] = [];
     return {
@@ -336,6 +511,16 @@ export const __test = {
     diagnosticCollections.length = 0;
     configurationValues.clear();
     workspaceFolderList = undefined;
+    webviewPanels.length = 0;
+    shownDocuments.length = 0;
+    executedCommands.length = 0;
+    failingCommands.clear();
+    activeEditor = undefined;
+    workspace.textDocuments = [];
+    onDidChangeActiveTextEditorEmitter.dispose();
+    onDidSaveTextDocumentEmitter.dispose();
+    onDidChangeTextDocumentEmitter.dispose();
+    onDidChangeConfigurationEmitter.dispose();
   },
 
   setWorkspaceRoot(fsPath: string | undefined): void {
@@ -371,5 +556,32 @@ export const __test = {
 
   get diagnosticCollections(): readonly MockDiagnosticCollection[] {
     return diagnosticCollections;
+  },
+
+  get webviewPanels(): readonly MockWebviewPanel[] {
+    return webviewPanels;
+  },
+
+  get shownDocuments(): ReadonlyArray<{ document: unknown; options: unknown }> {
+    return shownDocuments;
+  },
+
+  get executedCommands(): ReadonlyArray<{ command: string; args: unknown[] }> {
+    return executedCommands;
+  },
+
+  /** Make `commands.executeCommand(command)` reject. */
+  failCommand(command: string): void {
+    failingCommands.add(command);
+  },
+
+  createTextEditor(fsPath: string, viewColumn: ViewColumn = ViewColumn.One, languageId = 'go-templates'): MockTextEditor {
+    return { document: { uri: Uri.file(fsPath), languageId }, viewColumn };
+  },
+
+  /** Set the active editor and fire onDidChangeActiveTextEditor (as VS Code does). */
+  setActiveTextEditor(editor: MockTextEditor | undefined): void {
+    activeEditor = editor;
+    onDidChangeActiveTextEditorEmitter.fire(editor);
   },
 };

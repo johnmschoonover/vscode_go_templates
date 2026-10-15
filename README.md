@@ -8,6 +8,7 @@ Preview, debug, and highlight Go `text/template` and `html/template` files in VS
 
 ## Features
 - **Side-by-side preview:** A Go-powered renderer compiles your template against the selected context file (or an empty context) and opens the rendered output in a side-by-side preview webview.
+- **Preview layout:** Each template gets its own preview panel. Running Preview again reveals the existing panel, and switching to a template's editor brings its preview to the front without taking focus. **Go Template Studio: Toggle Side-by-Side Preview** opens or closes the active template's preview. **Go Template Studio: Set Preview Layout** opens new previews beside the editor or in a group below it, and remembers the choice per workspace.
 - **Live updates:** The preview streams updates while you type (with a short debounce) in addition to reacting to saves, so you can see rendered output evolve in near real time.
 - **Stable preview state:** Scroll position, text selection, and diagnostics in the preview persist between renders, keeping your place as you iterate on a template or tweak its context data.
 - **Diagnostics:** Errors surface both as VS Code squiggles and inside the preview sidebar, with clickable entries that focus the offending template or context location. The status footer reports render duration or fallback status, and the preview keeps the last successful output visible when errors occur.
@@ -42,7 +43,13 @@ With the default `auto` renderer mode, no Go installation is required when a bun
 - The chosen view mode is remembered per workspace. Until you choose one, `goTemplateStudio.defaultViewMode` (`html`, `text`, or `raw`) applies. **Go Template Studio: Toggle Preview View Mode** cycles the modes from the palette or a keybinding, and a keybinding can pass `"html"`, `"text"`, or `"raw"` as `args` to jump straight to one.
 - **Go Template Studio: Export Rendered Output** (palette, editor title bar, or the toolbar's Export button) exports the most recent successful render. You can save it to a file (the default name is derived from the template, e.g. `email.html` → `email.rendered.html`), copy it to the clipboard, or save it together with a context bundle. The bundle is a JSON file under `.gotemplatestudio/shares/` holding the template path and source, the context path and data, and the render time.
 - **Go Template Studio: Refresh Preview** forces a re-render of the active preview.
-- A status bar item shows the active context for the focused template, e.g. `context/asdf.json` or `No context`. Click it to switch contexts. It shows a warning icon when the last render failed and the preview is showing the last successful output.
+- A status bar item shows the active context for the focused template, e.g. `context/asdf.json` or `No context`. Click it to switch contexts. It shows a warning icon (with a warning background) when the last render failed and the preview is showing the last successful output. It also shows a warning icon when `auto` renderer mode fell back to `go run` because no bundled renderer is available. The tooltip explains which case applies. The preview footer names the renderer that produced the output (`bundled renderer`, `system Go`, or `system Go (auto fallback)`).
+
+### Preview Layout
+- Each template has at most one preview panel. Running **Preview Template** on a template whose preview is already open reveals that panel where you left it.
+- When you switch to a template editor whose preview is hidden behind another tab, the preview is revealed in its group without taking focus. Turn this off with `goTemplateStudio.preview.followActiveEditor`.
+- **Go Template Studio: Toggle Side-by-Side Preview** opens the active template's preview, prompting for a context like **Preview Template**, or closes it if it is open. Run it from a focused preview to close that preview.
+- **Go Template Studio: Set Preview Layout** chooses where new previews open: **Beside** the editor (default) or **Below** it in a new editor group. The choice is remembered per workspace. Until you choose, `goTemplateStudio.preview.layout` applies. Previews that are already open stay where they are.
 
 ### Sample Assets
 - `templates/asdf.go.tmpl` pairs with `context/asdf.json` to demonstrate a minimal template and context combination that the preview command can render immediately.
@@ -54,6 +61,9 @@ With the default `auto` renderer mode, no Go installation is required when a bun
   - `auto` (default) prefers the bundled worker when available and falls back to the system Go toolchain when not.
   - `bundled` requires a packaged worker and surfaces a helpful error if it is missing.
   - `system` always shells out to the configured `goBinary`.
+- `goTemplateStudio.defaultViewMode`: Preview view mode (`html`, `text`, or `raw`) used until you pick one from the toolbar (default `html`).
+- `goTemplateStudio.preview.layout`: Where new previews open, `beside` (default) or `below` the editor, until you choose a layout with **Set Preview Layout**.
+- `goTemplateStudio.preview.followActiveEditor`: Reveal a template's preview when you switch to its editor (default `true`).
 
 ### Workspace Configuration
 - Context directories and default associations can be customized in `.vscode/goTemplateStudio.json`. The extension watches for updates and refreshes the tree view automatically.
@@ -89,9 +99,9 @@ With the default `auto` renderer mode, no Go installation is required when a bun
   ```
 
 ## Next Steps
-1. Side-by-side layout controls and one preview per open template (see `ux_brief.md` section 7.2).
-2. JSON and YAML preview view modes and a render diff workflow (`ux_brief.md` sections 7.5 and 7.6).
-3. Integration tests with `@vscode/test-electron` (see `testing_plan.md`).
+1. JSON and YAML preview view modes and a render diff workflow (`ux_brief.md` sections 7.5 and 7.6).
+2. Integration tests with `@vscode/test-electron` (see `testing_plan.md`).
+3. Preview layout follow-ups: a toolbar button for the layout toggle and reuse of an existing editor group for the `below` layout (`ux_brief.md` section 7.2).
 
 ## Support the Project
 Go Template Studio is free and open source. If it saves you time, you can [buy me a coffee](https://buymeacoffee.com/johnmschoonover) to support continued development. The Sponsor button on the Marketplace listing and GitHub repository links to the same page.

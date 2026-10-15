@@ -17,9 +17,9 @@
 - **Deactivation:** Disposes preview panels, kills Go worker processes, and flushes telemetry queue (if opted-in).
 
 ## 3. Module Breakdown
-- **Preview Manager:** Handles creation of WebView panels, message routing, diff/view mode toggles, and live updates.
+- **Preview Manager:** Handles creation of WebView panels, message routing, diff/view mode toggles, and live updates. Keeps one panel per template document, reveals a template's panel when its editor becomes active (`goTemplateStudio.preview.followActiveEditor`), and places new panels by the preview layout (`beside` or `below`, chosen per workspace and defaulting to `goTemplateStudio.preview.layout`). The pure placement rules are in `src/services/previewLayout.ts`. It publishes per-template render state (failure, resolved renderer mode, `auto` fallback) through `onDidChangeState` for the status bar.
 - **Context Manager:** Provides tree data provider for context files, CRUD operations, schema validation, and default context association per template.
-- **Renderer Service:** Encapsulates process management for the Go worker, caches compiled templates, and reports diagnostics.
+- **Renderer Service:** Encapsulates process management for the Go worker, caches compiled templates, and reports diagnostics. Each `RenderResult` names the renderer that ran (`rendererMode`: `bundled` or `system`) and whether `auto` mode fell back to the system toolchain (`rendererFallback`).
 - **Configuration Service:** Reads and writes `.vscode/goTemplateStudio.json`, merges workspace/user settings, and supports multi-root workspaces.
 - **Telemetry Service:** Wrapper around VS Code telemetry reporter; disabled by default and collects only anonymous event counts when enabled.
 - **Export Service:** Streams rendered output to filesystem targets or clipboard and packages shareable bundles (template + context JSON).

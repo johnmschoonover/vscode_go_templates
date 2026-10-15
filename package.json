@@ -122,6 +122,16 @@
         "command": "goTemplateStudio.toggleViewMode",
         "title": "Go Template Studio: Toggle Preview View Mode",
         "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.toggleSideBySidePreview",
+        "title": "Go Template Studio: Toggle Side-by-Side Preview",
+        "category": "Go Template Studio"
+      },
+      {
+        "command": "goTemplateStudio.setPreviewLayout",
+        "title": "Go Template Studio: Set Preview Layout",
+        "category": "Go Template Studio"
       }
     ],
     "menus": {
@@ -211,6 +221,21 @@
           ],
           "default": "html",
           "description": "Preview view mode used until a mode is chosen from the preview toolbar or the Toggle Preview View Mode command (that choice is remembered per workspace)."
+        },
+        "goTemplateStudio.preview.layout": {
+          "type": "string",
+          "enum": ["beside", "below"],
+          "enumDescriptions": [
+            "Open the preview in an editor group beside the template.",
+            "Open the preview in a new editor group below the template."
+          ],
+          "default": "beside",
+          "description": "Where new previews open, until a layout is chosen with the Set Preview Layout command (that choice is remembered per workspace). Open previews stay where they are."
+        },
+        "goTemplateStudio.preview.followActiveEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "When you switch to a template that has an open preview, reveal that preview in its editor group without taking focus."
         }
       }
     }

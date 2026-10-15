@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { isRendererFallback, RendererMode, RendererModeSetting } from './renderStatus';
 
 export interface RenderDiagnostic {
   message: string;
@@ -17,6 +18,10 @@ export interface RenderResult {
   diagnostics: RenderDiagnostic[];
   durationMs: number;
   errorMessage?: string;
+  /** The renderer that produced this result. */
+  rendererMode: RendererMode;
+  /** True when `rendererMode` is `auto` and no bundled worker was found, so `go run` was used instead. */
+  rendererFallback: boolean;
 }
 
 interface GoWorkerResponse {
@@ -39,7 +44,7 @@ export class RendererService {
     const contextSnapshot = contextFile ? await this.createSnapshot(contextFile) : undefined;
 
     try {
-      const { command, args, mode, cwd } = await this.resolveRendererCommand(
+      const { command, args, mode, configuredMode, cwd } = await this.resolveRendererCommand(
         templateSnapshot.fsPath,
         contextSnapshot?.fsPath
       );
@@ -52,6 +57,8 @@ export class RendererService {
         diagnostics: response.diagnostics ?? [],
         durationMs: response.durationMs ?? 0,
         errorMessage: response.error,
+        rendererMode: mode,
+        rendererFallback: isRendererFallback(configuredMode, mode),
       };
     } finally {
       await templateSnapshot.dispose();
@@ -62,10 +69,16 @@ export class RendererService {
   private async resolveRendererCommand(
     templatePath: string,
     contextPath?: string
-  ): Promise<{ command: string; args: string[]; mode: 'bundled' | 'system'; cwd?: string }> {
+  ): Promise<{
+    command: string;
+    args: string[];
+    mode: RendererMode;
+    configuredMode: RendererModeSetting;
+    cwd?: string;
+  }> {
     const config = vscode.workspace.getConfiguration('goTemplateStudio');
     const goBinary = config.get<string>('goBinary', 'go');
-    const rendererMode = config.get<'auto' | 'bundled' | 'system'>('rendererMode', 'auto');
+    const rendererMode = config.get<RendererModeSetting>('rendererMode', 'auto');
     const bundledBinary = await this.getBundledWorkerPath();
 
     const needsBundled = rendererMode === 'bundled';
@@ -83,7 +96,7 @@ export class RendererService {
     }
 
     if (preferBundled && bundledBinary) {
-      return { command: bundledBinary, args, mode: 'bundled' };
+      return { command: bundledBinary, args, mode: 'bundled', configuredMode: rendererMode };
     }
 
     // Run the worker as a package from its module directory so go.mod/go.sum
@@ -94,6 +107,7 @@ export class RendererService {
       command: goBinary,
       args: ['run', '.', ...args],
       mode: 'system',
+      configuredMode: rendererMode,
       cwd: workerDir.fsPath,
     };
   }

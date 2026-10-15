@@ -8,6 +8,8 @@ import { registerContextCommands, resolveContextTarget } from './context/context
 import { isViewMode, PreviewManager, VIEW_MODE_LABELS, ViewMode } from './services/previewManager';
 import { DiagnosticService } from './services/diagnosticService';
 import { ExportService } from './services/exportService';
+import { PREVIEW_LAYOUT_LABELS, PREVIEW_LAYOUTS, PreviewLayout } from './services/previewLayout';
+import { describeRenderStatus } from './services/renderStatus';
 
 const TEMPLATE_LANGUAGE_IDS = ['go-templates', 'gotemplate'];
 const TEMPLATE_EXTENSIONS = ['.tmpl', '.tpl', '.gotmpl'];
@@ -133,6 +135,59 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  /**
+   * Opens (or reveals) the preview for `editor`'s document. Prompts for a context when the template has
+   * no association and no open preview (re-running Preview just reveals the existing panel); returns
+   * false when the user dismisses that prompt.
+   */
+  const openPreviewForEditor = async (editor: vscode.TextEditor): Promise<boolean> => {
+    const templateUri = editor.document.uri;
+    let activeContext = associationManager.getActiveContext(templateUri);
+    let contextUri: vscode.Uri | undefined = activeContext?.uri;
+    if (!activeContext && !previewManager.hasPreview(templateUri)) {
+      const contexts = associationManager.listContexts();
+      if (contexts.length === 0) {
+        void vscode.window.setStatusBarMessage(
+          'Go Template Studio: Rendering with empty context.',
+          5000
+        );
+      } else {
+        const pick = await vscode.window.showQuickPick(
+          [
+            {
+              label: 'Render without context',
+              description: 'Use an empty object for template data',
+              item: undefined,
+            },
+            ...contexts.map((item) => ({
+              label: item.label,
+              description: item.relativePath,
+              item,
+            })),
+          ],
+          {
+            placeHolder: 'Select a context file for rendering',
+          }
+        );
+
+        if (!pick) {
+          return false;
+        }
+
+        if (pick.item) {
+          activeContext = pick.item;
+          contextUri = activeContext.uri;
+          associationManager.setActiveContext(templateUri, activeContext);
+        } else {
+          contextUri = undefined;
+        }
+      }
+    }
+
+    await previewManager.showPreview(templateUri, contextUri, editor.document.languageId);
+    return true;
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand('goTemplateStudio.preview', async () => {
       const editor = vscode.window.activeTextEditor;
@@ -141,50 +196,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
 
-      const templateUri = editor.document.uri;
-      let activeContext = associationManager.getActiveContext(templateUri);
-      let contextUri: vscode.Uri | undefined = activeContext?.uri;
-      if (!activeContext) {
-        const contexts = associationManager.listContexts();
-        if (contexts.length === 0) {
-          void vscode.window.setStatusBarMessage(
-            'Go Template Studio: Rendering with empty context.',
-            5000
-          );
+      await openPreviewForEditor(editor);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('goTemplateStudio.toggleSideBySidePreview', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        // A focused preview panel has no text editor; toggling from it closes that preview.
+        const focusedTemplate = previewManager.getFocusedPreviewTemplate();
+        if (focusedTemplate) {
+          previewManager.closePreview(focusedTemplate);
         } else {
-          const pick = await vscode.window.showQuickPick(
-            [
-              {
-                label: 'Render without context',
-                description: 'Use an empty object for template data',
-                item: undefined,
-              },
-              ...contexts.map((item) => ({
-                label: item.label,
-                description: item.relativePath,
-                item,
-              })),
-            ],
-            {
-              placeHolder: 'Select a context file for rendering',
-            }
-          );
-
-          if (!pick) {
-            return;
-          }
-
-          if (pick.item) {
-            activeContext = pick.item;
-            contextUri = activeContext.uri;
-            associationManager.setActiveContext(templateUri, activeContext);
-          } else {
-            contextUri = undefined;
-          }
+          void vscode.window.showWarningMessage('Open a Go template to toggle its preview.');
         }
+        return;
       }
 
-      await previewManager.showPreview(templateUri, contextUri, editor.document.languageId);
+      if (previewManager.closePreview(editor.document.uri)) {
+        return;
+      }
+      await openPreviewForEditor(editor);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('goTemplateStudio.setPreviewLayout', async () => {
+      const current = previewManager.getPreviewLayout();
+      const descriptions: Record<PreviewLayout, string> = {
+        beside: 'Open the preview in an editor group to the side of the template',
+        below: 'Open the preview in a new editor group below the template',
+      };
+      const pick = await vscode.window.showQuickPick(
+        PREVIEW_LAYOUTS.map((layout) => ({
+          label: PREVIEW_LAYOUT_LABELS[layout],
+          description: layout === current ? '(current)' : undefined,
+          detail: descriptions[layout],
+          layout,
+        })),
+        {
+          placeHolder: 'Where should new Go template previews open? (remembered for this workspace)',
+        }
+      );
+      if (!pick) {
+        return;
+      }
+
+      await previewManager.setPreviewLayout(pick.layout);
+      void vscode.window.setStatusBarMessage(
+        `Go Template Studio: Preview layout: ${PREVIEW_LAYOUT_LABELS[pick.layout]} (applies to newly opened previews)`,
+        4000
+      );
     })
   );
 
@@ -230,11 +293,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 /**
  * Left-aligned status bar item showing the active context for the focused template (or the template
- * behind the focused preview panel). Adds a warning icon when the last render failed and the preview
- * fell back to its last successful output.
- *
- * TODO(status-bar): also flag renderer degradation (e.g. auto mode falling back from the bundled worker
- * to `go run`) once RendererService surfaces the resolved renderer mode in RenderResult.
+ * behind the focused preview panel). Adds a warning icon when the last render failed (with a warning
+ * background, since the preview fell back to its last successful output) or when `auto` renderer mode
+ * fell back to the system Go toolchain because no bundled renderer is available.
  */
 function registerContextStatusBar(
   context: vscode.ExtensionContext,
@@ -264,22 +325,22 @@ function registerContextStatusBar(
 
     const activeContext = associationManager.getActiveContext(templateUri);
     const label = activeContext ? activeContext.relativePath : 'No context';
-    const state = previewManager.getRenderState(templateUri);
-    const degraded = Boolean(state?.degraded);
+    const status = describeRenderStatus(
+      previewManager.getRenderState(templateUri),
+      Boolean(previewManager.getRenderSnapshot(templateUri))
+    );
 
-    item.text = `$(json) ${label}${degraded ? ' $(warning)' : ''}`;
-    const tooltipLines = [`Go Template Studio context: ${label}`];
-    if (degraded) {
-      const fallbackNote = previewManager.getRenderSnapshot(templateUri)
-        ? ' The preview is showing the last successful output.'
-        : '';
-      tooltipLines.push(`Last render failed${state?.message ? `: ${state.message}` : ''}.${fallbackNote}`);
-    }
-    tooltipLines.push('Click to select a different context.');
-    item.tooltip = tooltipLines.join('\n');
-    item.backgroundColor = degraded ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+    item.text = `$(json) ${label}${status.warning ? ' $(warning)' : ''}`;
+    item.tooltip = [
+      `Go Template Studio context: ${label}`,
+      ...status.tooltipLines,
+      'Click to select a different context.',
+    ].join('\n');
+    item.backgroundColor = status.warningBackground
+      ? new vscode.ThemeColor('statusBarItem.warningBackground')
+      : undefined;
     item.accessibilityInformation = {
-      label: `Go Template Studio context: ${label}${degraded ? '. Last render failed.' : ''}`,
+      label: `Go Template Studio context: ${label}${status.accessibilityNote ? `. ${status.accessibilityNote}` : ''}`,
     };
     item.command = {
       command: 'goTemplateStudio.selectContext',

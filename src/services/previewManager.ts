@@ -4,6 +4,13 @@ import * as vscode from 'vscode';
 import { RendererService, RenderResult } from './rendererService';
 import { DiagnosticService, PreviewDiagnostic } from './diagnosticService';
 import type { RenderSnapshot } from './exportService';
+import {
+  getPreviewPlacement,
+  PreviewLayout,
+  resolvePreviewLayout,
+  shouldRevealPreviewForEditor,
+} from './previewLayout';
+import { formatRendererLabel, RendererMode } from './renderStatus';
 
 export const VIEW_MODES = ['html', 'text', 'raw'] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
@@ -19,11 +26,16 @@ export function isViewMode(value: unknown): value is ViewMode {
 }
 
 const VIEW_MODE_STATE_KEY = 'goTemplateStudio.preview.viewMode';
+const LAYOUT_STATE_KEY = 'goTemplateStudio.preview.layout';
 
 export interface PreviewRenderState {
   /** True when the latest render failed and the preview shows the last good output or an error. */
   readonly degraded: boolean;
   readonly message?: string;
+  /** Renderer used for the latest render; undefined when the renderer could not be started. */
+  readonly rendererMode?: RendererMode;
+  /** True when `auto` renderer mode fell back to the system Go toolchain for the latest render. */
+  readonly rendererFallback?: boolean;
 }
 
 interface SuccessfulRender {
@@ -47,6 +59,8 @@ interface PreviewSession {
   viewStateSubscription?: vscode.Disposable;
   lastSuccessful?: SuccessfulRender;
   renderState?: PreviewRenderState;
+  /** Set once the panel is closed; in-flight renders check it before touching the webview. */
+  disposed: boolean;
 }
 
 interface PreviewPayload {
@@ -57,9 +71,16 @@ interface PreviewPayload {
   isStale: boolean;
   errorMessage?: string;
   viewMode: ViewMode;
+  /** Footer note naming the renderer, e.g. "bundled renderer" or "system Go (auto fallback)". */
+  rendererLabel?: string;
 }
 
 /**
+ * Owns one preview panel per template document (keyed by the template URI). Re-running Preview on a
+ * template reveals its existing panel, switching to a template editor reveals its panel without
+ * taking focus (`goTemplateStudio.preview.followActiveEditor`), and new panels open beside or below
+ * the editor according to the preview layout (workspace choice, then `goTemplateStudio.preview.layout`).
+ *
  * Webview message protocol.
  *
  * Extension -> webview:
@@ -75,6 +96,8 @@ interface PreviewPayload {
  */
 export class PreviewManager implements vscode.Disposable {
   private readonly sessions = new Map<string, PreviewSession>();
+  /** Panels being created (the `below` layout awaits a workbench command first), to avoid duplicates. */
+  private readonly pendingSessions = new Map<string, Promise<PreviewSession>>();
   private readonly disposables: vscode.Disposable[] = [];
   private readonly renderDelayMs = 200;
   private readonly onDidChangeStateEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
@@ -93,6 +116,7 @@ export class PreviewManager implements vscode.Disposable {
       this.onDidChangeStateEmitter,
       vscode.workspace.onDidSaveTextDocument((document) => this.handleSavedDocument(document)),
       vscode.workspace.onDidChangeTextDocument((event) => this.handleChangedDocument(event)),
+      vscode.window.onDidChangeActiveTextEditor((editor) => this.handleActiveEditorChange(editor)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration('goTemplateStudio.defaultViewMode') &&
@@ -119,53 +143,173 @@ export class PreviewManager implements vscode.Disposable {
   ): Promise<void> {
     const key = this.getKey(templateUri);
     let session = this.sessions.get(key);
+    let created = false;
 
     if (!session) {
-      const panel = vscode.window.createWebviewPanel(
-        'goTemplateStudio.preview',
-        `Preview: ${path.basename(templateUri.fsPath)}`,
-        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-        { enableScripts: true, retainContextWhenHidden: true }
-      );
+      let pending = this.pendingSessions.get(key);
+      if (!pending) {
+        pending = this.createSession(key, templateUri, contextUri, languageId).finally(() => {
+          this.pendingSessions.delete(key);
+        });
+        this.pendingSessions.set(key, pending);
+        created = true;
+      }
+      session = await pending;
+    }
 
-      const created: PreviewSession = {
-        templateKey: key,
-        templateUri,
-        contextUri,
-        panel,
-        languageId,
-        initialized: false,
-      };
-      session = created;
-
-      this.sessions.set(key, created);
-      created.viewStateSubscription = panel.onDidChangeViewState((event) => {
-        if (event.webviewPanel.active) {
-          this.lastActiveKey = key;
-        }
-        this.onDidChangeStateEmitter.fire(created.templateUri);
-      });
-      panel.onDidDispose(() => {
-        if (created.renderTimer) {
-          clearTimeout(created.renderTimer);
-        }
-        created.messageSubscription?.dispose();
-        created.viewStateSubscription?.dispose();
-        this.sessions.delete(key);
-        if (this.lastActiveKey === key) {
-          this.lastActiveKey = undefined;
-        }
-        this.onDidChangeStateEmitter.fire(created.templateUri);
-      });
-    } else {
+    if (!created) {
       session.templateUri = templateUri;
       session.contextUri = contextUri;
       session.languageId = languageId;
+      if (!session.disposed) {
+        // One panel per template: reveal the existing panel in whichever group the user left it.
+        session.panel.reveal(session.panel.viewColumn, true);
+      }
     }
 
     this.lastActiveKey = key;
     await this.renderSession(session, true);
-    session.panel.reveal(vscode.ViewColumn.Beside, true);
+  }
+
+  /** Closes the preview for `templateUri`. Returns false when that template has no open preview. */
+  public closePreview(templateUri: vscode.Uri): boolean {
+    const session = this.sessions.get(this.getKey(templateUri));
+    if (!session) {
+      return false;
+    }
+
+    session.panel.dispose();
+    return true;
+  }
+
+  public getPreviewLayout(): PreviewLayout {
+    return resolvePreviewLayout(
+      this.workspaceState.get<string>(LAYOUT_STATE_KEY),
+      vscode.workspace.getConfiguration('goTemplateStudio').get<string>('preview.layout')
+    );
+  }
+
+  /** Persists the layout for this workspace. Applies to previews opened afterwards. */
+  public async setPreviewLayout(layout: PreviewLayout): Promise<void> {
+    await this.workspaceState.update(LAYOUT_STATE_KEY, layout);
+    this.output.appendLine(`[preview] layout set to ${layout}`);
+  }
+
+  private async createSession(
+    key: string,
+    templateUri: vscode.Uri,
+    contextUri: vscode.Uri | undefined,
+    languageId: string
+  ): Promise<PreviewSession> {
+    const layout = this.getPreviewLayout();
+    const placement = getPreviewPlacement(layout);
+    const sourceEditor = vscode.window.activeTextEditor;
+    let viewColumn = placement.viewColumn;
+    let restoreEditorFocus = placement.restoreEditorFocus;
+
+    if (placement.prepareCommand) {
+      try {
+        await vscode.commands.executeCommand(placement.prepareCommand);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.output.appendLine(
+          `[preview] ${placement.prepareCommand} failed (${message}); opening the preview beside the editor`
+        );
+        viewColumn = vscode.ViewColumn.Beside;
+        restoreEditorFocus = false;
+      }
+    }
+
+    const panel = vscode.window.createWebviewPanel(
+      'goTemplateStudio.preview',
+      `Preview: ${path.basename(templateUri.fsPath)}`,
+      { viewColumn, preserveFocus: true },
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+
+    const session: PreviewSession = {
+      templateKey: key,
+      templateUri,
+      contextUri,
+      panel,
+      languageId,
+      initialized: false,
+      disposed: false,
+    };
+
+    this.sessions.set(key, session);
+    session.viewStateSubscription = panel.onDidChangeViewState((event) => {
+      if (event.webviewPanel.active) {
+        this.lastActiveKey = key;
+      }
+      this.onDidChangeStateEmitter.fire(session.templateUri);
+    });
+    panel.onDidDispose(() => {
+      session.disposed = true;
+      if (session.renderTimer) {
+        clearTimeout(session.renderTimer);
+        session.renderTimer = undefined;
+      }
+      session.messageSubscription?.dispose();
+      session.viewStateSubscription?.dispose();
+      session.lastSuccessful = undefined;
+      session.renderState = undefined;
+      // A newer panel for the same template may already own the key; only remove our own entry.
+      if (this.sessions.get(key) === session) {
+        this.sessions.delete(key);
+      }
+      if (this.lastActiveKey === key) {
+        this.lastActiveKey = undefined;
+      }
+      this.output.appendLine(`[preview] closed preview for ${path.basename(session.templateUri.fsPath)}`);
+      this.onDidChangeStateEmitter.fire(session.templateUri);
+    });
+
+    this.output.appendLine(`[preview] opened preview for ${path.basename(templateUri.fsPath)} (${layout} layout)`);
+
+    if (restoreEditorFocus && sourceEditor && this.isSameResource(sourceEditor.document.uri, templateUri)) {
+      try {
+        // The prepare command focused the new group; give focus back to the template editor.
+        await vscode.window.showTextDocument(sourceEditor.document, {
+          viewColumn: sourceEditor.viewColumn,
+          preserveFocus: false,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.output.appendLine(`[preview] failed to refocus the template editor: ${message}`);
+      }
+    }
+
+    return session;
+  }
+
+  private handleActiveEditorChange(editor: vscode.TextEditor | undefined): void {
+    if (!editor) {
+      return;
+    }
+
+    const session = this.sessions.get(this.getKey(editor.document.uri));
+    if (!session || session.disposed) {
+      return;
+    }
+
+    const enabled = vscode.workspace
+      .getConfiguration('goTemplateStudio')
+      .get<boolean>('preview.followActiveEditor', true);
+    const reveal = shouldRevealPreviewForEditor({
+      enabled: enabled !== false,
+      panelVisible: session.panel.visible,
+      panelColumn: session.panel.viewColumn,
+      editorColumn: editor.viewColumn,
+    });
+    if (!reveal) {
+      return;
+    }
+
+    session.panel.reveal(session.panel.viewColumn, true);
+    this.output.appendLine(
+      `[preview] revealed preview for ${path.basename(session.templateUri.fsPath)} (follows active editor)`
+    );
   }
 
   public async updateContext(templateUri: vscode.Uri, contextUri: vscode.Uri | undefined): Promise<void> {
@@ -298,6 +442,9 @@ export class PreviewManager implements vscode.Disposable {
   }
 
   private async renderSession(session: PreviewSession, force = false): Promise<void> {
+    if (session.disposed) {
+      return;
+    }
     this.ensureWebviewInitialized(session);
 
     try {
@@ -311,6 +458,10 @@ export class PreviewManager implements vscode.Disposable {
       }
 
       const result = await this.rendererService.render(session.templateUri, session.contextUri);
+      if (session.disposed) {
+        // The panel was closed while the renderer ran.
+        return;
+      }
       const previewDiagnostics = this.diagnosticService.applyDiagnostics(
         session.templateUri,
         session.contextUri,
@@ -321,6 +472,10 @@ export class PreviewManager implements vscode.Disposable {
       session.contextSignature = contextSignature;
 
       const isHtml = this.isHtmlTemplate(session);
+      const rendererState = {
+        rendererMode: result.rendererMode,
+        rendererFallback: result.rendererFallback,
+      };
       if (!result.errorMessage) {
         session.lastSuccessful = {
           rendered: result.rendered,
@@ -328,9 +483,9 @@ export class PreviewManager implements vscode.Disposable {
           contextUri: session.contextUri,
           renderedAt: new Date(),
         };
-        session.renderState = { degraded: false };
+        session.renderState = { degraded: false, ...rendererState };
       } else {
-        session.renderState = { degraded: true, message: result.errorMessage };
+        session.renderState = { degraded: true, message: result.errorMessage, ...rendererState };
       }
 
       const payload = this.buildPreviewPayload(session, result, previewDiagnostics, isHtml);
@@ -361,6 +516,10 @@ export class PreviewManager implements vscode.Disposable {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (session.disposed) {
+        this.output.appendLine(`[preview] render finished after the preview closed: ${message}`);
+        return;
+      }
       this.output.appendLine(`[preview] failed to render: ${message}`);
       this.diagnosticService.applyDiagnostics(session.templateUri, session.contextUri, []);
       session.renderState = { degraded: true, message };
@@ -509,6 +668,7 @@ export class PreviewManager implements vscode.Disposable {
       isStale: useFallback,
       errorMessage: result.errorMessage,
       viewMode: this.getViewMode(),
+      rendererLabel: formatRendererLabel(result.rendererMode, result.rendererFallback),
     };
   }
 
@@ -1074,15 +1234,16 @@ export class PreviewManager implements vscode.Disposable {
           }
 
           const duration = payload.durationMs > 0 ? ' (' + payload.durationMs + ' ms)' : '';
+          const rendererNote = payload.rendererLabel ? ' \\u00B7 ' + payload.rendererLabel : '';
           if (payload.errorMessage) {
             if (payload.isStale) {
-              status.textContent = 'Render failed, showing last successful result' + duration;
+              status.textContent = 'Render failed, showing last successful result' + duration + rendererNote;
             } else {
-              status.textContent = 'Render failed' + duration;
+              status.textContent = 'Render failed' + duration + rendererNote;
             }
             status.classList.add('status--stale');
           } else {
-            status.textContent = 'Rendered in ' + payload.durationMs + ' ms';
+            status.textContent = 'Rendered in ' + payload.durationMs + ' ms' + rendererNote;
             status.classList.remove('status--stale');
           }
           status.hidden = false;
