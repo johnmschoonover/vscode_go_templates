@@ -2,7 +2,7 @@
   "name": "go-template-studio",
   "displayName": "Go Template Studio",
   "description": "A Visual Studio Code extension for working with Go templates, providing syntax highlighting, previewing, and context management.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "johnmschoonover",
   "repository": {
     "type": "git",
@@ -16,10 +16,29 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/johnmschoonover"
+  },
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
   "categories": [
+    "Programming Languages",
     "Other"
   ],
+  "keywords": [
+    "go",
+    "golang",
+    "template",
+    "text/template",
+    "html/template",
+    "preview",
+    "gotmpl"
+  ],
   "activationEvents": [
+    "onLanguage:go-templates",
     "onCommand:goTemplateStudio.showWelcome",
     "onCommand:goTemplateStudio.preview",
     "onCommand:goTemplateStudio.selectContext",
@@ -32,7 +51,7 @@
       {
         "id": "go-templates",
         "aliases": ["Go Templates", "go templates"],
-        "extensions": [".gotmpl", ".tmpl"],
+        "extensions": [".gotmpl", ".tmpl", ".tpl"],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -76,7 +95,7 @@
         {
           "command": "goTemplateStudio.preview",
           "group": "navigation@99",
-          "when": "resourceLangId == go-templates || resourceLangId == gotemplate || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
+          "when": "resourceLangId == go-templates || resourceExtname == .tmpl || resourceExtname == .tpl || resourceExtname == .gotmpl"
         }
       ]
     },

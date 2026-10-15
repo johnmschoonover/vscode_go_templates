@@ -38,13 +38,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const selection = await vscode.window.showInformationMessage(
         'Go Template Studio scaffolding is ready. Review the project docs for the MVP plan.',
         'Open PRD',
-        'Open Technical Spec'
+        'Open Technical Spec',
+        'Buy me a coffee'
       );
 
       if (selection === 'Open PRD') {
         void vscode.commands.executeCommand('vscode.open', vscode.Uri.joinPath(context.extensionUri, 'PRD.md'));
       } else if (selection === 'Open Technical Spec') {
         void vscode.commands.executeCommand('vscode.open', vscode.Uri.joinPath(context.extensionUri, 'technical_spec.md'));
+      } else if (selection === 'Buy me a coffee') {
+        void vscode.env.openExternal(vscode.Uri.parse('https://buymeacoffee.com/johnmschoonover'));
       }
     })
   );

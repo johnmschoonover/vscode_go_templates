@@ -1,22 +1,22 @@
 # Operational Readiness Checklist: Go Template Studio for VS Code
 
 ## 1. Release Management
-- **Versioning:** Follow semantic versioning (`0.y.z` during MVP). Document changes in `CHANGELOG.md`.
+- **Versioning:** Follow semantic versioning (`0.y.z` during MVP). Document changes in `CHANGELOG.md` (✅ created; `0.1.0` entry drafted).
 - **Packaging Workflow:**
   1. Run `npm run build` and ensure output passes lint/tests.
   2. Execute `vsce package` to produce `.vsix` artifact.
   3. Perform manual smoke validation using packaged `.vsix` before publishing.
-- **Publishing:** Use shared Microsoft publisher account (to be created) with MFA enabled. Publish extension as free and open-source with MIT license.
+- **Publishing:** Use shared Microsoft publisher account (to be created) with MFA enabled. Publish extension as free and open-source with MIT license. Funding links (Marketplace `sponsor` field, `.github/FUNDING.yml`, README badge) are in place.
 - **Rollback Plan:** Maintain previous `.vsix` artifacts; if critical regression occurs, unpublish latest version and republish prior stable release within 24 hours.
 
 ## 2. Documentation & Support
 - **User Docs:**
-  - `README.md` summarizing features, installation, and quickstart.
+  - `README.md` summarizing features, installation, and quickstart (✅ restructured as the Marketplace listing body).
   - `docs/quickstart.md` with screenshots and sample workflow.
   - `docs/faq.md` covering known limitations (e.g., fallback renderer availability).
-- **Developer Docs:** Technical spec and contribution guidelines (`CONTRIBUTING.md`).
+- **Developer Docs:** Technical spec and contribution guidelines (`CONTRIBUTING.md`, ✅ created).
 - **Support Playbook:**
-  - GitHub issue templates (bug, feature request, question).
+  - GitHub issue templates (bug, feature request, question) (✅ created under `.github/ISSUE_TEMPLATE/`, plus a pull request template).
   - Response expectations: acknowledge new issues within 48 hours, provide workaround or fix plan within 5 business days.
 
 ## 3. Monitoring & Telemetry

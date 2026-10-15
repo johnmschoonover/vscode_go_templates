@@ -1,0 +1,26 @@
+# Changelog
+
+All notable changes to Go Template Studio are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/) (`0.y.z` during the MVP).
+
+## [0.1.0] - Unreleased
+
+First public release.
+
+### Added
+- Side-by-side preview of Go `text/template` and `html/template` files, rendered by a Go worker against the selected context file (or an empty context via **Render without context**).
+- Live updates: the preview re-renders while you type (debounced) and on save, preserving scroll position, text selection, and diagnostics between renders.
+- Diagnostics for template and context errors, shown as VS Code squiggles and in the preview sidebar with clickable entries that jump to the offending location. The last successful output stays visible when a render fails, and the status footer reports render duration or fallback status.
+- Isolated iframe rendering for HTML output, inline code display for other outputs, and an error banner that does not reset the webview.
+- Context explorer tree view that lists context files from configured directories and lets you open or select them; directories and associations are configurable in `.vscode/goTemplateStudio.json`.
+- Built-in template helpers: `list`, `map`/`dict`, `default`, `join`, `safe`, `escape`, and string filters (`upper`, `lower`, `title`, `capitalize`, `trim`, `replace`).
+- **Go Templates** language mode (`.tmpl`, `.gotmpl`, `.tpl`) with TextMate syntax highlighting from the vendored [`jinliming2/vscode-go-template`](https://github.com/jinliming2/vscode-go-template) grammar.
+- Bundled `go-worker` renderer binaries for `darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`, and `win32-arm64`, with a `go run` fallback for development builds.
+- Settings `goTemplateStudio.goBinary` and `goTemplateStudio.rendererMode` (`auto`, `bundled`, `system`).
+- Commands: Show Welcome, Preview Template, Select Context, Refresh Contexts, and Open Context File.
+- Marketplace packaging: extension icon, gallery banner, keywords, Sponsor link, and a **Buy me a coffee** button on the welcome notification.
+- Contributor docs: `CONTRIBUTING.md`, GitHub issue templates, and a pull request template.
+
+### Fixed
+- The editor title preview button now matches the contributed `go-templates` language id (plus `.tmpl`, `.tpl`, and `.gotmpl` extensions).
+
+[0.1.0]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v0.1.0

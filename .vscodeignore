@@ -15,3 +15,6 @@ node_modules/**
 !language-configuration.json
 !README.md
 !LICENSE
+!assets/icon.png
+!CHANGELOG.md
+!syntaxes/**
