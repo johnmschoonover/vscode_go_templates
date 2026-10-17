@@ -2,7 +2,12 @@
 
 All notable changes to Go Template Studio are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/) (`0.y.z` during the MVP).
 
-## [1.1.0] - Unreleased
+## [1.1.1] - 2026-10-17
+
+### Fixed
+- The `1.1.0` changelog entry was published with an "Unreleased" heading, which the Marketplace **Changelog** tab showed verbatim. The heading now carries the release date. No functional changes.
+
+## [1.1.0] - 2026-10-14
 
 First feature release after the `v1.0.x` packaging tags. Earlier tags shipped the manifest as version 0.0.1; from this release on the manifest version and the git tag match.
 
@@ -38,4 +43,5 @@ First feature release after the `v1.0.x` packaging tags. Earlier tags shipped th
 - The `go run` renderer fallback no longer needs network access or a warm Go module cache (the worker's dependencies are vendored) and ignores unrelated `go.work` files (`GOWORK=off`).
 - Command Palette entries no longer repeat the category ("Go Template Studio: Go Template Studio: …").
 
+[1.1.1]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v1.1.1
 [1.1.0]: https://github.com/johnmschoonover/vscode_go_templates/releases/tag/v1.1.0
